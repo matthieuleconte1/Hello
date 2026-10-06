@@ -1,0 +1,36 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.11000,0.08000,0.26000,1.00000",
+      "display-p3:0.02000,0.02000,0.07000,1.00000"
+    ]
+  },
+  "groups" : [
+    {
+      "name" : "Prompt",
+      "layers" : [ { "name" : "prompt", "image-name" : "prompt.svg", "glass" : true } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.25 },
+      "translucency" : { "enabled" : false, "value" : 0 },
+      "specular" : true
+    },
+    {
+      "name" : "Touche",
+      "layers" : [ { "name" : "key", "image-name" : "key.svg", "glass" : true } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.65 },
+      "translucency" : { "enabled" : true, "value" : 0.25 },
+      "specular" : true
+    },
+    {
+      "name" : "Halo",
+      "layers" : [ { "name" : "ring", "image-name" : "ring.svg", "glass" : true } ],
+      "shadow" : { "kind" : "layer-color", "opacity" : 0.8 },
+      "translucency" : { "enabled" : true, "value" : 0.2 },
+      "specular" : true
+    },
+    {
+      "name" : "Lueur",
+      "layers" : [ { "name" : "glow", "image-name" : "glow.svg", "glass" : false } ]
+    }
+  ],
+  "supported-platforms" : { "squares" : [ "macOS" ] }
+}

@@ -1,0 +1,34 @@
+Installer Hello
+==============
+
+Nécessite macOS 14 (Sonoma) ou plus récent, Mac Apple Silicon ou Intel.
+
+1. Glisse Hello.app sur le dossier Applications (dans cette fenêtre).
+2. Ouvre Hello depuis le dossier Applications.
+
+Hello n'est pas signé par un développeur enregistré chez Apple : au premier
+lancement, macOS affiche « Apple n'a pas pu vérifier que Hello… ».
+Clique sur « OK » (ou « Terminé »), puis :
+
+   Réglages Système › Confidentialité et sécurité
+   → tout en bas, « Hello a été bloqué… » → « Ouvrir quand même »
+   → confirme avec ton mot de passe ou Touch ID.
+
+(Sur macOS 14, un clic droit sur Hello › Ouvrir › Ouvrir suffit.)
+
+Alternative dans le Terminal :
+   xattr -dr com.apple.quarantine /Applications/Hello.app
+
+Ensuite
+-------
+Hello n'a pas d'icône dans le Dock : il vit dans la barre des menus.
+Au premier lancement, l'accueil te fait choisir ton raccourci (⌘ Espace
+conseillé : l'accueil propose de le libérer de Spotlight).
+
+Facultatif : pour que Hello puisse coller directement (emoji, presse-papiers),
+autorise-le dans Réglages Système › Confidentialité et sécurité › Accessibilité.
+
+Assistant IA (facultatif) : l'accueil de Hello vérifie si Hermes Agent est
+installé et si un compte IA (ChatGPT, Claude, Copilot…) est connecté, et
+propose de l'installer ou de se connecter dans le Terminal. C'est aussi
+dans Réglages › Agent (Hermes). Hello fonctionne entièrement sans.

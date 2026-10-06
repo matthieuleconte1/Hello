@@ -1,0 +1,10 @@
+import AppKit
+
+// Avant tout réglage lu : reprise des données de l'ancienne app (Halo).
+LegacyMigration.run()
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.setActivationPolicy(.accessory)
+app.run()

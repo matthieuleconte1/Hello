@@ -1,0 +1,87 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "display-p3:0.11000,0.08000,0.26000,1.00000",
+      "display-p3:0.02000,0.02000,0.07000,1.00000"
+    ]
+  },
+  "groups": [
+    {
+      "name": "Prompt",
+      "layers": [
+        {
+          "name": "dollar",
+          "image-name": "dollar.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      },
+      "specular": true
+    },
+    {
+      "name": "Recherche",
+      "layers": [
+        {
+          "name": "front",
+          "image-name": "front.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.7
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.12
+      },
+      "specular": true
+    },
+    {
+      "name": "Résultats",
+      "layers": [
+        {
+          "name": "card2",
+          "image-name": "card2.svg",
+          "glass": true
+        },
+        {
+          "name": "card3",
+          "image-name": "card3.svg",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.45
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.4
+      },
+      "specular": true
+    },
+    {
+      "name": "Lueur",
+      "layers": [
+        {
+          "name": "glow",
+          "image-name": "glow.svg",
+          "glass": false
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
