@@ -5,7 +5,7 @@ import ServiceManagement
 import SwiftUI
 
 enum Mode: Equatable {
-    case root, apps, emoji, clipboard, colors, menuBar, hotkey, output, uninstall, uninstallFiles, stats, agent
+    case root, apps, emoji, clipboard, colors, menuBar, hotkey, output, uninstall, uninstallFiles, stats, agent, chats
 
     var title: String {
         switch self {
@@ -19,7 +19,8 @@ enum Mode: Equatable {
         case .output: "Terminal"
         case .uninstall, .uninstallFiles: "Désinstaller"
         case .stats: "Statistiques"
-        case .agent: "Hermes"
+        case .agent: AgentEngine.assistant.short
+        case .chats: "Conversations"
         }
     }
 
@@ -36,6 +37,7 @@ enum Mode: Equatable {
         case .uninstall, .uninstallFiles: "trash"
         case .stats: "chart.bar.xaxis"
         case .agent: "sparkles"
+        case .chats: "bubble.left.and.text.bubble.right"
         }
     }
 
@@ -52,13 +54,15 @@ enum Mode: Equatable {
         case .uninstall: "Quelle application désinstaller ?"
         case .uninstallFiles: "Filtrer les fichiers…"
         case .stats: "Rechercher une app…"
-        case .agent: ""
+        case .agent: "Question de suite…"
+        case .chats: "Rechercher dans les conversations avec l'IA…"
         }
     }
 
     var emptyText: String {
         switch self {
         case .clipboard: "L'historique est vide — copiez quelque chose !"
+        case .chats: "Aucune conversation avec l'IA pour l'instant"
         case .emoji: "Aucun caractère trouvé"
         default: "Aucun résultat"
         }
@@ -136,6 +140,21 @@ final class LauncherModel: ObservableObject {
     @Published private(set) var run: ShellRun?
     @Published private(set) var agent: AgentRun?
     private var agentWatch: AnyCancellable?
+    /// Fichiers et captures joints à la prochaine demande à Hermes.
+    @Published private(set) var attachments: [Attachment] = []
+    /// Un fichier glissé survole le panneau.
+    @Published var dropTargeted = false
+    /// Premier Échap pendant que Hermes travaille : un second avant cette date annule la requête.
+    private var cancelArmedUntil = Date.distantPast
+    /// Hermes a fini pendant que Hello était fermé : la prochaine ouverture montre sa réponse.
+    private var unseenAgentResult = false
+
+    /// Une conversation à retrouver à la réouverture : Hermes y travaille encore, ou a fini sans qu'on l'ait vu.
+    var agentInBackground: Bool {
+        mode == .agent && agent != nil && (agent?.isThinking == true || unseenAgentResult)
+    }
+
+    func markAgentSeen() { unseenAgentResult = false }
     @Published private(set) var presented = false
     @Published private(set) var revealID = 0
     @Published private(set) var forward = true
@@ -196,7 +215,16 @@ final class LauncherModel: ObservableObject {
         glyphFilter = .all
         run = nil
         uninstallApp = nil
+        attachments = []
         setQuery("")
+    }
+
+    func setAttachments(_ list: [Attachment]) { attachments = list }
+
+    var placeholder: String {
+        guard mode == .root, !attachments.isEmpty else { return mode.placeholder }
+        let name = AgentEngine.assistant.name
+        return attachments.count == 1 ? "Que doit faire \(name) avec ce fichier ?" : "Que doit faire \(name) avec ces fichiers ?"
     }
 
     /// Réaffiche l'état laissé tel quel (texte, mode, sélection, commande en cours) en rafraîchissant les données.
@@ -248,6 +276,9 @@ final class LauncherModel: ObservableObject {
             lightReveal = light
             if !light { revealID += 1 }
         }
+        // Fermé, le panneau revient toujours à l'état de départ complet (goutte, verre clair) : sinon, après une
+        // réouverture rapide, l'ouverture complète suivante partirait de l'état final et ne jouerait rien.
+        if !value { lightReveal = false }
         presented = value
     }
 
@@ -262,7 +293,14 @@ final class LauncherModel: ObservableObject {
 
     func attachAgent(_ run: AgentRun) {
         agent = run
+        cancelArmedUntil = .distantPast
         agentWatch = run.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        // Fermer Hello ne l'arrête pas : s'il finit pendant ce temps, une notification prévient.
+        run.onFinish = { [weak self] run in
+            guard let self, run === agent, !presented else { return }
+            unseenAgentResult = true
+            AgentNotifier.shared.post(run)
+        }
     }
 
     func back() {
@@ -328,10 +366,13 @@ final class LauncherModel: ObservableObject {
         case .colors: items = colorItems()
         case .menuBar: items = menuBarItems()
         case .hotkey: items = hotkeyItems()
-        case .output, .agent: items = []
+        case .output: items = []
+        // Champ de question de suite : « / » liste les commandes de l'agent.
+        case .agent: items = slashItems(query.trimmingCharacters(in: .whitespaces))
         case .uninstall: items = uninstallPickerItems()
         case .uninstallFiles: items = uninstallFileItems()
         case .stats: items = statsItems()
+        case .chats: items = chatItems()
         }
         let count = mode == .emoji ? glyphs.count : items.count
         selection = count == 0 ? 0 : min(max(selection, 0), count - 1)
@@ -386,7 +427,7 @@ final class LauncherModel: ObservableObject {
 
     /// Mode focus : seulement la barre de recherche, tant que rien n'est tapé (un message s'affiche quand même).
     var collapsed: Bool {
-        AppSettings.shared.focusMode && mode == .root && toast == nil
+        AppSettings.shared.focusMode && mode == .root && toast == nil && attachments.isEmpty
             && query.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
@@ -452,6 +493,11 @@ final class LauncherModel: ObservableObject {
         case kVK_Delete where cmd && selectedItem?.remove != nil:
             selectedItem?.remove?.run()
             return true
+        case kVK_Delete where query.isEmpty && mode == .root && !cmd && !attachments.isEmpty:
+            detach(attachments[attachments.count - 1])
+            return true
+        case kVK_Delete where mode == .agent && agent?.isThinking == true:
+            return true
         case kVK_Delete where query.isEmpty && mode != .root:
             back()
             return true
@@ -474,6 +520,12 @@ final class LauncherModel: ObservableObject {
         guard cmd, let key = event.charactersIgnoringModifiers?.lowercased() else { return false }
         switch key {
         case "v":
+            // Fichiers copiés dans le Finder ou image copiée : joints à la demande pour Hermes (⇧⌘V colle le texte).
+            if mode == .root, Hermes.available, !flags.contains(.shift),
+               let found = Attachments.fromPasteboard(.general) {
+                attach(found)
+                return true
+            }
             // Lien file:// collé dans Hello vide : le fichier s'ouvre tout de suite avec son app par défaut.
             if mode == .root, query.isEmpty, !flags.contains(.shift),
                let text = NSPasteboard.general.string(forType: .string),
@@ -490,6 +542,12 @@ final class LauncherModel: ObservableObject {
             return NSApp.sendAction(Selector(flags.contains(.shift) ? "redo:" : "undo:"), to: nil, from: nil)
         case "w":
             c.hide()
+            return true
+        case "o" where mode == .root && Hermes.available:
+            pickFilesForAgent()
+            return true
+        case "s" where mode == .root && Hermes.available && flags.contains(.shift):
+            captureForAgent()
             return true
         case ",":
             WindowManager.showSettings()
@@ -531,7 +589,20 @@ final class LauncherModel: ObservableObject {
         case .output:
             if run?.running == true { run?.cancel() } else { back() }
         case .agent:
-            if agent?.isThinking == true { agent?.cancel() } else { back() }
+            if agent?.isThinking == true {
+                // Deux fois Échap pour annuler : une seule pression ne doit pas perdre une longue requête.
+                if Date() < cancelArmedUntil {
+                    cancelArmedUntil = .distantPast
+                    agent?.cancel()
+                } else {
+                    cancelArmedUntil = Date().addingTimeInterval(2.5)
+                    flash("Échap encore pour annuler · ⌘W la laisse tourner en arrière-plan")
+                }
+            } else if !query.isEmpty {
+                setQuery("")
+            } else {
+                back()
+            }
         default:
             query.isEmpty ? back() : setQuery("")
         }
@@ -543,7 +614,7 @@ final class LauncherModel: ObservableObject {
             glyphFilter = glyphFilter.next
             selection = 0
             refresh()
-        case .root:
+        case .root, .agent:
             if let completion = selectedItem?.completion { setQuery(completion) }
         case .uninstallFiles:
             let all = Set(uninstallFiles.map(\.path))
@@ -568,13 +639,23 @@ final class LauncherModel: ObservableObject {
             }
         case .agent:
             guard let agent else { return }
+            if query.hasPrefix("/") {
+                if kind == .primary { selectedItem?.primary.run() }
+                return
+            }
+            // Question de suite tapée sous la réponse : ↵ Auto, ⌘↵ Recherche & Action, ⌥↵ Code.
+            let followUp = query.trimmingCharacters(in: .whitespaces)
+            if !followUp.isEmpty && !agent.isThinking {
+                self.followUp(followUp, level: kind == .secondary ? .work : kind == .tertiary ? .code : .fast)
+                return
+            }
             switch (agent.phase, kind) {
-            case (.answer, .secondary) where agent.level == .research:
+            case (.answer, .secondary) where agent.level == .work, (.done, .secondary) where agent.level == .work:
                 // Continuer la même conversation dans le terminal.
                 agent.continueInTerminal()
                 c.hide()
             case (.answer, .secondary):
-                startAgent(agent.request, level: .research)
+                startAgent(agent.request, level: .work)
             case (.answer(let text), _):
                 Paster.copy(text)
                 c.hide()
@@ -582,7 +663,7 @@ final class LauncherModel: ObservableObject {
                 agent.send(prompt)
                 c.hide()
             case (.escalate(let prompt), _):
-                agent.research(prompt)
+                agent.work(prompt)
             case (.done, _), (.delegated, _), (.failed, _):
                 c.hide()
             case (.thinking, _), (.streaming, _):
@@ -614,15 +695,21 @@ final class LauncherModel: ObservableObject {
             return [Hint(label: canPaste ? "Coller" : "Copier", key: "↵"),
                     Hint(label: "Copier", key: "⌘↵"),
                     Hint(label: glyphFilter.next.title, key: "⇥")]
+        case .agent where query.hasPrefix("/"):
+            return itemHints
         case .agent:
             switch agent?.phase {
-            case .thinking?, .streaming?: return [Hint(label: "Annuler", key: "esc")]
+            case .thinking?, .streaming?:
+                return [Hint(label: "Arrière-plan", key: "⌘W"), Hint(label: "Annuler", key: "esc esc")]
+            case _ where !query.trimmingCharacters(in: .whitespaces).isEmpty:
+                return [Hint(label: "Demander", key: "↵"), Hint(label: "Recherche & Action", key: "⌘↵"),
+                        Hint(label: "Code", key: "⌥↵")]
             case .answer?:
                 return [Hint(label: "Copier", key: "↵"),
-                        Hint(label: agent?.level == .research ? "Continuer dans le terminal" : "Chercher plus", key: "⌘↵"),
+                        Hint(label: agent?.level == .work ? "Continuer dans le terminal" : "Recherche & Action", key: "⌘↵"),
                         Hint(label: "Retour", key: "esc")]
             case .escalate?:
-                return [Hint(label: "Recherche", key: "↵"), Hint(label: "Approfondi (terminal)", key: "⌘↵"),
+                return [Hint(label: "Recherche & Action", key: "↵"), Hint(label: "Code (terminal)", key: "⌘↵"),
                         Hint(label: "Annuler", key: "esc")]
             default: return [Hint(label: "Fermer", key: "↵"), Hint(label: "Retour", key: "esc")]
             }
@@ -632,25 +719,36 @@ final class LauncherModel: ObservableObject {
                     running ? Hint(label: "Arrêter", key: "⌃C") : Hint(label: "Relancer", key: "⌘R"),
                     Hint(label: "Dans Terminal", key: "⌘↵")]
         default:
-            guard let item = selectedItem else { return [] }
-            var hints = [Hint(label: item.primary.title, key: "↵")]
-            if let s = item.secondary { hints.append(Hint(label: s.title, key: "⌘↵")) }
-            if let t = item.tertiary { hints.append(Hint(label: t.title, key: "⌥↵")) }
-            if let r = item.remove { hints.append(Hint(label: r.title, key: "⌘⌫")) }
-            if item.copyText != nil && hints.count < 3 { hints.append(Hint(label: "Copier", key: "⇧↵")) }
-            if item.completion != nil { hints.append(Hint(label: "Compléter", key: "⇥")) }
-            if mode == .uninstallFiles { hints.append(Hint(label: "Tout", key: "⇥")) }
-            return Array(hints.prefix(4))
+            return itemHints
         }
+    }
+
+    private var itemHints: [Hint] {
+        guard let item = selectedItem else { return [] }
+        var hints = [Hint(label: item.primary.title, key: "↵")]
+        if let s = item.secondary { hints.append(Hint(label: s.title, key: "⌘↵")) }
+        if let t = item.tertiary { hints.append(Hint(label: t.title, key: "⌥↵")) }
+        if let r = item.remove { hints.append(Hint(label: r.title, key: "⌘⌫")) }
+        if item.copyText != nil && hints.count < 3 { hints.append(Hint(label: "Copier", key: "⇧↵")) }
+        if item.completion != nil { hints.append(Hint(label: "Compléter", key: "⇥")) }
+        if mode == .uninstallFiles { hints.append(Hint(label: "Tout", key: "⇥")) }
+        return Array(hints.prefix(4))
     }
 
     // MARK: - Racine
 
     private func rootItems() -> [ResultItem] {
         let q = query.trimmingCharacters(in: .whitespaces)
+        // Avec des pièces jointes, la demande est pour Hermes (« ?? » et « ??? » forcent toujours le niveau).
+        if !attachments.isEmpty && Hermes.available { return agentItems(q, explicit: q.hasPrefix("?")) }
         if q.isEmpty { return AppSettings.shared.focusMode ? [] : suggestions() }
 
         if q.hasPrefix("?") { return agentItems(q, explicit: true) }
+        // « /resume », « /code … » : commandes de l'agent, avant les chemins qui commencent par « / ».
+        if q.hasPrefix("/") {
+            let slash = slashItems(q)
+            if !slash.isEmpty { return slash + terminalItems(q) }
+        }
         if let files = fileURLItems(q) { return files }
         var out = terminalItems(q)
         let folded = Fuzzy.fold(q)
@@ -681,7 +779,7 @@ final class LauncherModel: ObservableObject {
     }
 
     private func suggestions() -> [ResultItem] {
-        var out: [ResultItem] = []
+        var out: [ResultItem] = updateItem().map { [$0] } ?? []
         let apps = Dictionary(c.apps.apps.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let allCommands = commands
         let byID = Dictionary(allCommands.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -892,6 +990,21 @@ final class LauncherModel: ObservableObject {
                 c.hide()
                 WindowManager.showSettings(tab: .permissions)
             },
+            Command(id: "cmd.update", title: "Rechercher les mises à jour de Hello",
+                    subtitle: "Version \(Updater.currentVersion) · releases GitHub de \(Updater.repo)",
+                    keywords: "mise a jour update version github release nouvelle",
+                    icon: .symbol("arrow.down.circle", .green)) { [unowned self] in
+                if Updater.shared.pending != nil {
+                    Updater.shared.install()
+                } else {
+                    flash("Recherche de mises à jour…")
+                    Updater.shared.check()
+                }
+            },
+            Command(id: "cmd.chats", title: "Conversations avec l'IA",
+                    subtitle: "\(ChatStore.shared.conversations.count) conversation(s) · reprendre ou poser une question de suite",
+                    keywords: "hermes claude codex ia ai agent chat conversations historique memoire discussions",
+                    icon: .symbol("bubble.left.and.text.bubble.right", .purple)) { [unowned self] in enter(.chats) },
             Command(id: "cmd.stats", title: "Statistiques d'utilisation",
                     subtitle: "Apps les plus utilisées, historique et raccourcis appris",
                     keywords: "stats statistiques usage frequent utilisation historique",
@@ -1479,18 +1592,26 @@ enum Haptic {
 final class PagerState: ObservableObject {
     /// Position en pages, indépendante de la taille animée du panneau.
     @Published private(set) var position: CGFloat = 0
+    /// Fin prévue du mouvement des pages (doigts posés, puis ressort). Non publié : personne ne se redessine pour ça.
+    private static var movingUntil = Date.distantPast
+    static var isMoving: Bool { Date() < movingUntil }
 
     func drag(_ offset: CGFloat, page: Int, width: CGFloat) {
         guard width > 0 else { return }
+        Self.movingUntil = Date() + 0.2
         position = -CGFloat(page) + offset / width
     }
 
-    func settle(page: Int) { position = -CGFloat(page) }
+    func settle(page: Int) {
+        Self.movingUntil = Date() + 0.5
+        position = -CGFloat(page)
+    }
 
     func reset(page: Int = 0) {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { settle(page: page) }
+        Self.movingUntil = .distantPast
     }
     /// Accueil : progression du balayage vers la grille (1 = seuil atteint).
     @Published var rootSwipe: CGFloat = 0

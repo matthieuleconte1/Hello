@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import UserNotifications
 
 /// Intégration de Hermes Agent (Nous Research) : un modèle rapide « routeur » agit tout de suite
 /// sur les demandes simples, ou reformule la demande et l'envoie au modèle par défaut dans le terminal.
@@ -13,7 +14,8 @@ enum Hermes {
     /// Providers pour lesquels Hermes a des identifiants.
     static var providers: [String] { HermesStatus.shared.providers }
 
-    static var available: Bool { binary != nil && AppSettings.shared.agentEnabled }
+    /// L'agent est utilisable dès qu'un des fournisseurs (Hermes, Claude Code, Codex) est installé.
+    static var available: Bool { AppSettings.shared.agentEnabled && AgentEngine.allCases.contains(where: \.installed) }
 
     /// Localise `hermes` et lit ses comptes. Au lancement, puis à la demande (onboarding, réglages).
     static func locate() {
@@ -107,20 +109,22 @@ enum Hermes {
         let providers = Self.providers
         guard !providers.isEmpty else { return }
         let s = AppSettings.shared
+        // Seuls les niveaux confiés à Hermes utilisent ses comptes.
+        guard AgentLevel.allCases.contains(where: { $0.config.engine == .hermes }) else { return }
         func pick(_ preferences: [String]) -> ModelOption? {
             preferences.lazy.compactMap { name in models.first { $0.model == name } }.first
         }
-        if !s.agentRouterModel.isEmpty && !providers.contains(s.agentRouterProvider) {
+        if AgentLevel.fast.config.engine == .hermes, !s.agentRouterModel.isEmpty, !providers.contains(s.agentRouterProvider) {
             let choice = pick(quickPreferences)
             s.agentRouterProvider = choice?.provider ?? ""
             s.agentRouterModel = choice?.model ?? ""
         }
-        if !s.agentResearchModel.isEmpty && !providers.contains(s.agentResearchProvider) {
+        if AgentLevel.work.config.engine == .hermes, !s.agentResearchModel.isEmpty, !providers.contains(s.agentResearchProvider) {
             let choice = pick(researchPreferences)
             s.agentResearchProvider = choice?.provider ?? ""
             s.agentResearchModel = choice?.model ?? ""
         }
-        if !s.agentDefaultProvider.isEmpty && !providers.contains(s.agentDefaultProvider) {
+        if AgentLevel.code.config.engine == .hermes, !s.agentDefaultProvider.isEmpty, !providers.contains(s.agentDefaultProvider) {
             s.agentDefaultProvider = ""
             s.agentDefaultModel = ""
         }
@@ -131,9 +135,6 @@ enum Hermes {
         return provider.isEmpty ? model : "\(model) (\(providerName(provider)))"
     }
 
-    static var defaultModelLabel: String {
-        label(provider: AppSettings.shared.agentDefaultProvider, model: AppSettings.shared.agentDefaultModel)
-    }
 
     /// Arguments -m / --provider pour un modèle choisi dans les réglages.
     static func modelArgs(provider: String, model: String) -> [String] {
@@ -147,38 +148,27 @@ enum Hermes {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
-    /// Ouvre une session Hermes interactive dans le terminal choisi, amorcée avec le prompt.
-    static func delegate(_ prompt: String) {
-        let settings = AppSettings.shared
-        var command = "hermes chat -q \(quote(prompt))"
-        for arg in modelArgs(provider: settings.agentDefaultProvider, model: settings.agentDefaultModel) {
-            command += " " + quote(arg)
-        }
-        if !settings.agentDefaultReasoning.isEmpty { command += " --reasoning \(settings.agentDefaultReasoning)" }
-        Shell.runInTerminal(command, in: Shell.expand(settings.agentWorkdir))
-    }
 
     /// Phase 1 : classement sans outils (rapide, ne peut rien faire lui-même).
-    static func routerPrompt(for request: String) -> String {
+    static func routerPrompt(for request: String, context: MacContext) -> String {
         let forms: String
         if AppSettings.shared.agentStrategy == "delegate" {
             forms = """
-            Reply exactly: DELEGATE: <rewritten, precise, self-contained prompt for a more capable agent, in the user's \
+            Reply exactly: CODE: <rewritten, precise, self-contained prompt for a coding agent, in the user's \
             language, with useful context: paths, constraints, expected result>
             """
         } else {
             forms = """
             Decide the level of effort needed and reply with exactly one of these forms and nothing else:
-            ANSWER: <short answer in the user's language> — level 1: a short answer you are sure of is enough \
+            ANSWER: <short answer in the user's language> — level 1, fast: a short answer you are sure of is enough \
             (fact, definition, conversion, which command to use).
-            ACT: <the quick action to perform, rewritten as a precise instruction> — level 1: doable in under a minute \
-            with a few commands (open or launch something, change a setting, create a single file or folder, run one \
-            short command).
-            RESEARCH: <rewritten, precise question in the user's language> — level 2: needs up-to-date information, web \
-            search, comparing sources, or a thoughtful explanation, but no long work on the Mac.
-            DELEGATE: <rewritten, precise, self-contained prompt for a more capable agent, in the user's language, with \
-            useful context: paths, constraints, expected result> — level 3: coding, building an app, multi-step work on \
-            files or projects, anything long, destructive or irreversible.
+            WORK: <the request rewritten as a precise, self-contained instruction in the user's language> — level 2, \
+            research and action: needs up-to-date information, web search, comparing sources or a thoughtful \
+            explanation, or any action on this Mac (open, launch or control apps, change a setting, find, open or \
+            organize files, look at the screen or the attachments).
+            CODE: <rewritten, precise, self-contained prompt for a coding agent, in the user's language, with useful \
+            context: paths, constraints, expected result> — level 3: writing or fixing code, building an app or a \
+            script, long multi-step work in a project.
             """
         }
         return """
@@ -186,19 +176,61 @@ enum Hermes {
         You have no tools and must not try to do the task.
         \(forms)
 
+        \(context.routerNote)
+
         User request: \(request)
         """
     }
 
-    /// Phase 2 : exécution d'une action rapide, bornée en tours et en durée.
-    static func actPrompt(for instruction: String) -> String {
+    /// Niveau 2 : recherche et actions sur le Mac, bornées en tours et en durée.
+    static func workPrompt(for instruction: String, context: MacContext) -> String {
         """
         \(instruction)
 
-        Do it now on this Mac with as few tool calls as possible. Never do anything destructive or irreversible \
-        (deleting data, sending messages, payments, pushing code). Finish with one line: \
-        DONE: <short summary in the user's language>
+        \(context.block)
+
+        You can both research and act.
+        For a question: research it carefully (use the web when useful) and answer in the user's language, structured \
+        and concise, with short sections or bullet points when it helps, and cite sources as markdown links.
+        For an action: do it now on this Mac, with as few tool calls as possible. Ways to act, in order of preference:
+        1. Shell: `open` (apps, files, URLs; `open -a "App"`, `open -R` reveals in Finder), `mdfind` (Spotlight) to \
+        find files, `shortcuts list` / `shortcuts run "Name"`, `defaults`, `pmset`, `networksetup`, `pbcopy` / `pbpaste`.
+        2. AppleScript with `osascript -e`: scriptable apps (Finder selection and windows, the current tab of Safari \
+        or Chrome, Music, Calendar, Reminders, Notes, Mail drafts), System Events (dark mode, keystrokes, menus, the \
+        interface of other apps), `set volume output volume N`.
+        3. To see the screen: `screencapture -x /tmp/hello-screen.png`, then vision_analyze.
+        Never do anything destructive or irreversible (deleting or overwriting data, emptying the trash, sending \
+        messages or emails, payments, purchases, pushing code, changing passwords or security settings): prepare it \
+        (draft, open the right page or window) and leave the last step to the user.
+        When you performed an action, finish with one line: DONE: <short summary in the user's language>
         """
+    }
+
+    /// Outils du niveau 2. Pas de computer_use : lancé depuis Hello, personne n'est là pour approuver un clic.
+    static let workTools = "web,file,terminal,vision,browser,memory"
+
+    /// La première image jointe part avec la demande ; les autres sont citées par leur chemin.
+    static func imageArgs(_ context: MacContext) -> [String] {
+        context.firstImage.map { ["--image", $0.url.path] } ?? []
+    }
+
+    /// Étape lisible d'après un événement `tool_use` de Hermes.
+    static func stepLabel(_ name: String, input: [String: Any]?) -> String {
+        let text = { (key: String) in (input?[key] as? String).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } }
+        let file = { (key: String) in text(key).map { URL(fileURLWithPath: $0).lastPathComponent } ?? "un fichier" }
+        switch name {
+        case "terminal": return text("command").map { "$ " + $0.replacingOccurrences(of: "\n", with: " ⏎ ") } ?? "Lance une commande"
+        case "vision_analyze": return "Regarde l'image"
+        case "read_file": return "Lit \(file("path"))"
+        case "write_file", "patch": return "Écrit \(file("path"))"
+        case "search_files": return "Cherche des fichiers"
+        case "web_search": return text("query").map { "Cherche « \($0) »" } ?? "Cherche sur le web"
+        case "web_extract": return "Lit une page web"
+        case "execute_code": return "Exécute du code"
+        case "todo_list": return "Planifie les étapes"
+        case let n where n.hasPrefix("browser"): return "Navigue dans le navigateur"
+        default: return name
+        }
     }
 }
 
@@ -211,49 +243,43 @@ final class HermesStatus: ObservableObject {
     @Published fileprivate(set) var checking = false
 }
 
-/// Les trois niveaux de réflexion de l'agent.
+/// Les trois niveaux de l'agent. Fast : Luna répond seule ou choisit le niveau (Auto). Recherche & Action : web et
+/// actions sur le Mac, réponse dans Hello. Code : session interactive dans le terminal.
 enum AgentLevel: Int, CaseIterable {
-    case quick = 1, research, deep
+    case fast = 1, work, code
 
     var title: String {
         switch self {
-        case .quick: "Rapide"
-        case .research: "Recherche"
-        case .deep: "Approfondi"
+        case .fast: "Fast"
+        case .work: "Recherche & Action"
+        case .code: "Code"
         }
     }
 
     var symbol: String {
         switch self {
-        case .quick: "bolt.fill"
-        case .research: "magnifyingglass.circle.fill"
-        case .deep: "brain.head.profile"
+        case .fast: "bolt.fill"
+        case .work: "magnifyingglass.circle.fill"
+        case .code: "chevron.left.forwardslash.chevron.right"
         }
     }
 
     var tint: Color {
         switch self {
-        case .quick: .yellow
-        case .research: .cyan
-        case .deep: .purple
+        case .fast: .yellow
+        case .work: .cyan
+        case .code: .purple
         }
     }
 
-    /// Modèle utilisé à ce niveau, pour l'affichage.
-    var modelLabel: String {
-        let s = AppSettings.shared
-        switch self {
-        case .quick: return Hermes.label(provider: s.agentRouterProvider, model: s.agentRouterModel)
-        case .research: return Hermes.label(provider: s.agentResearchProvider, model: s.agentResearchModel)
-        case .deep: return Hermes.defaultModelLabel
-        }
-    }
+    /// Modèle et fournisseur utilisés à ce niveau, pour l'affichage.
+    var modelLabel: String { config.label }
 
     var detail: String {
         switch self {
-        case .quick: "Luna choisit le niveau"
-        case .research: "Cherche sur le web et répond ici"
-        case .deep: "Session complète dans \(Shell.terminal.name)"
+        case .fast: "Auto : répond ou choisit le niveau"
+        case .work: "Cherche sur le web, agit sur le Mac, répond ici"
+        case .code: "Session de code dans \(Shell.terminal.name)"
         }
     }
 }
@@ -271,16 +297,84 @@ final class AgentRun: ObservableObject {
 
     let request: String
     @Published private(set) var level: AgentLevel
-    @Published private(set) var phase: Phase = .thinking
+    @Published private(set) var phase: Phase = .thinking {
+        didSet {
+            guard !isThinking else { return }
+            record()
+            if !finished {
+                finished = true
+                onFinish?(self)
+            }
+        }
+    }
+    /// Appelé une fois, quand la demande se termine (réponse, action, échec ou annulation).
+    var onFinish: ((AgentRun) -> Void)?
+    private var finished = false
     @Published private(set) var stage = "analyse ta demande"
     @Published private(set) var details = ""
+    /// Étapes déjà faites (commandes, clics, lectures), affichées au fil de l'eau.
+    @Published private(set) var steps: [String] = []
+    /// App au premier plan et pièces jointes, figées au moment de la demande.
+    let context: MacContext
+    var attachments: [Attachment] { context.attachments }
+    /// Conversation dont cette demande fait partie ; l'échange y est ajouté quand il se termine.
+    private(set) var conversation: ChatConversation
+    /// Échanges précédents, affichés au-dessus de la demande en cours.
+    let earlier: [ChatTurn]
+    private var recorded = false
     private(set) var sessionID: String?
+    /// Fournisseur de l'étape en cours (celui du niveau, figé au lancement).
+    private(set) var engine: AgentEngine
     private(set) var startedAt = Date()
     private var process: Process?
 
-    init(request: String, level: AgentLevel) {
+    init(request: String, level: AgentLevel, attachments: [Attachment] = [],
+         conversation: ChatConversation = ChatConversation()) {
         self.request = request
         self.level = level
+        engine = level.config.engine
+        self.conversation = conversation
+        earlier = conversation.turns
+        context = MacContext(attachments: attachments, history: conversation.transcript)
+    }
+
+    /// Conversation rouverte depuis l'historique : son dernier échange, déjà terminé.
+    init(restoring conversation: ChatConversation) {
+        let last = conversation.turns.last
+        request = last?.request ?? ""
+        level = last?.agentLevel ?? .fast
+        engine = last?.agentEngine ?? .hermes
+        self.conversation = conversation
+        earlier = Array(conversation.turns.dropLast())
+        recorded = true
+        steps = last?.steps ?? []
+        sessionID = last?.sessionID
+        let files = (last?.attachments ?? []).filter { FileManager.default.fileExists(atPath: $0) }
+        context = MacContext(attachments: files.map { Attachment(url: URL(fileURLWithPath: $0)) })
+        phase = switch last?.kind {
+        case .done?: .done(last?.answer ?? "")
+        case .code?: .delegated(last?.answer ?? "")
+        default: .answer(last?.answer ?? "")
+        }
+    }
+
+    /// Ajoute l'échange terminé à la conversation, et à l'historique s'il est activé. Les échecs ne sont pas gardés.
+    private func record() {
+        guard !recorded else { return }
+        let outcome: (ChatTurn.Kind, String)
+        switch phase {
+        case .answer(let text): outcome = (.answer, text)
+        case .done(let summary): outcome = (.done, summary)
+        case .delegated(let prompt): outcome = (.code, prompt)
+        default: return
+        }
+        recorded = true
+        conversation.turns.append(ChatTurn(date: Date(), level: level.rawValue, request: request, answer: outcome.1,
+                                           kind: outcome.0, steps: steps, attachments: attachments.map(\.url.path),
+                                           sessionID: sessionID, engine: engine.rawValue))
+        if AppSettings.shared.agentHistory { ChatStore.shared.save(conversation) }
+        // La barre de recherche revient, pour une question de suite.
+        DispatchQueue.main.async { Controller.shared.focusSearch() }
     }
 
     var isThinking: Bool {
@@ -292,48 +386,44 @@ final class AgentRun: ObservableObject {
 
     var modelLabel: String { level.modelLabel }
 
+    /// Le fournisseur du niveau, s'il est installé ; sinon la demande échoue avec un message clair.
+    private func engine(for level: AgentLevel) -> (AgentEngine, LevelConfig)? {
+        let config = level.config
+        guard config.engine.installed else {
+            phase = .failed("\(config.engine.title) n'est pas installé. Choisis un autre fournisseur dans Réglages › Agent, "
+                            + "ou installe-le : \(config.engine.installCommand)")
+            return nil
+        }
+        engine = config.engine
+        return (config.engine, config)
+    }
+
     func start() {
         startedAt = Date()
         switch level {
-        case .deep: send(request)
-        case .research: research(request)
-        case .quick:
+        case .code: send(request)
+        case .work: work(request)
+        case .fast:
             stage = "choisit le niveau"
-            AppSettings.shared.agentStrategy == "act" ? act(request) : classify()
+            AppSettings.shared.agentStrategy == "act" ? work(request) : classify()
         }
     }
 
-    // MARK: Niveau 1 — Rapide
+    // MARK: Niveau 1 — Fast / Auto
 
     private func classify() {
-        let settings = AppSettings.shared
-        var args = ["-z", Hermes.routerPrompt(for: request), "-t", "todo"]
-            + Hermes.modelArgs(provider: settings.agentRouterProvider, model: settings.agentRouterModel)
-        if !settings.agentRouterReasoning.isEmpty { args += ["--reasoning", settings.agentRouterReasoning] }
-        launch(args) { [weak self] text in self?.route(text) }
-    }
-
-    private func act(_ instruction: String) {
-        let settings = AppSettings.shared
-        stage = "s'en occupe"
-        var args = ["chat", "-Q", "-q", Hermes.actPrompt(for: instruction),
-                    "--max-turns", "8", "--run-budget", "60", "-t", "terminal,file,web"]
-            + Hermes.modelArgs(provider: settings.agentRouterProvider, model: settings.agentRouterModel)
-        if !settings.agentRouterReasoning.isEmpty { args += ["--reasoning", settings.agentRouterReasoning] }
-        launch(args) { [weak self] text in
-            guard let self else { return }
-            if let range = text.range(of: "DONE:", options: .backwards) {
-                details = text[..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
-                phase = .done(text[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines))
-            } else {
-                phase = .done(text)
-            }
+        guard let (engine, config) = engine(for: .fast) else { return }
+        let args = engine.routerArgs(Hermes.routerPrompt(for: request, context: context), config)
+        if engine.streamsRouter {
+            stream(args, showText: false, budget: 90) { [weak self] text in self?.route(text) }
+        } else {
+            launch(args, budget: engine.needsTimeout ? 90 : nil) { [weak self] text in self?.route(text) }
         }
     }
 
-    /// Luna a choisi : niveau 1 (réponse ou action), 2 (recherche) ou 3 (terminal).
+    /// Luna a choisi : niveau 1 (elle répond), 2 (recherche & action) ou 3 (code dans le terminal).
     private func route(_ text: String) {
-        let tags = ["ANSWER:", "ACT:", "RESEARCH:", "DELEGATE:"]
+        let tags = ["ANSWER:", "WORK:", "CODE:"]
         let found = tags.compactMap { tag in text.range(of: tag).map { (tag, $0) } }
             .min { $0.1.lowerBound < $1.1.lowerBound }
         guard let (tag, range) = found else {
@@ -344,10 +434,9 @@ final class AgentRun: ObservableObject {
             .replacingOccurrences(of: #"\s*[—–-]\s*level\s*\d\s*$"#, with: "", options: [.regularExpression, .caseInsensitive])
             .trimmingCharacters(in: .whitespacesAndNewlines)
         switch tag {
-        case "ACT:": act(content)
-        case "RESEARCH:": research(content)
-        case "DELEGATE:":
-            level = .deep
+        case "WORK:": work(content)
+        case "CODE:":
+            level = .code
             send(content)
             // Le terminal passe devant : on referme le panneau.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Controller.shared.hide() }
@@ -355,70 +444,79 @@ final class AgentRun: ObservableObject {
         }
     }
 
-    // MARK: Niveau 2 — Recherche (réponse en direct dans Hello)
+    // MARK: Niveau 2 — Recherche & Action (réponse en direct dans Hello)
 
-    func research(_ prompt: String) {
-        let settings = AppSettings.shared
-        stage = "cherche"
-        level = .research
+    func work(_ prompt: String) {
+        stage = "s'en occupe"
+        level = .work
         phase = .thinking
         startedAt = Date()
-        let instructions = """
-        \(prompt)
-
-        Research this carefully (use the web when useful) and answer in the user's language, structured and concise, \
-        with short sections or bullet points when it helps, and cite sources as markdown links. \
-        Never do anything destructive or irreversible on this Mac.
-        """
-        var args = ["chat", "-q", instructions, "--format", "stream-json",
-                    "--max-turns", "25", "--run-budget", "300", "-t", "web,file,terminal"]
-            + Hermes.modelArgs(provider: settings.agentResearchProvider, model: settings.agentResearchModel)
-        if !settings.agentResearchReasoning.isEmpty { args += ["--reasoning", settings.agentResearchReasoning] }
-        var streamed = ""
-        launch(args, streaming: { [weak self] line in
-            guard let self, let data = line.data(using: .utf8),
-                  let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-            if let sid = event["session_id"] as? String { sessionID = sid }
-            switch event["type"] as? String {
-            case "text":
-                streamed += event["text"] as? String ?? ""
-                phase = .streaming(streamed)
-            case "result":
-                let text = (event["text"] as? String) ?? streamed
-                phase = text.isEmpty ? .failed("Aucune réponse.") : .answer(text)
-            default: break
+        guard let (engine, config) = engine(for: .work) else { return }
+        let args = engine.workArgs(Hermes.workPrompt(for: prompt, context: context), config, context: context)
+        stream(args, showText: true, budget: engine.needsTimeout ? 300 : nil) { [weak self] text in
+            guard let self else { return }
+            // Une action se termine par « DONE: résumé » ; une recherche, par la réponse elle-même.
+            if let range = text.range(of: "DONE:", options: .backwards) {
+                details = text[..<range.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+                phase = .done(text[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines))
+            } else {
+                phase = .answer(text)
             }
-        }) { [weak self] _ in
-            guard let self, self.isThinking else { return }
-            phase = streamed.isEmpty ? .failed("Aucune réponse.") : .answer(streamed)
         }
     }
 
-    // MARK: Niveau 3 — Approfondi (terminal)
+    // MARK: Niveau 3 — Code (terminal)
 
     func send(_ prompt: String) {
-        Hermes.delegate(prompt)
+        guard let (engine, config) = engine(for: .code) else { return }
+        Shell.runInTerminal(engine.terminalCommand(prompt + "\n\n" + context.block, config),
+                            in: Shell.expand(AppSettings.shared.agentWorkdir))
         phase = .delegated(prompt)
     }
 
-    /// Reprend la session de recherche dans le terminal, avec le même modèle.
+    /// Reprend la session du niveau 2 dans le terminal, avec le fournisseur qui l'a menée.
     func continueInTerminal() {
-        guard let sessionID else { return send(request) }
-        let s = AppSettings.shared
-        var command = "hermes chat --resume \(Hermes.quote(sessionID))"
-        for arg in Hermes.modelArgs(provider: s.agentResearchProvider, model: s.agentResearchModel) {
-            command += " " + Hermes.quote(arg)
-        }
-        Shell.runInTerminal(command, in: Shell.expand(s.agentWorkdir))
+        guard let sessionID, engine.installed else { return send(request) }
+        Shell.runInTerminal(engine.resumeCommand(sessionID, AgentLevel.work.config),
+                            in: Shell.expand(AppSettings.shared.agentWorkdir))
     }
 
     // MARK: Processus
 
-    /// Lance Hermes. `streaming` reçoit chaque ligne de sortie au fil de l'eau (sur le fil principal),
-    /// `handle` la sortie complète à la fin (code 0 uniquement).
-    private func launch(_ args: [String], streaming: ((String) -> Void)? = nil, then handle: @escaping (String) -> Void) {
-        guard let binary = Hermes.binary else {
-            phase = .failed("Hermes introuvable dans le PATH.")
+    /// Fournisseur en flux JSON : étapes et texte au fil de l'eau, puis `finish` avec la réponse finale.
+    private func stream(_ args: [String], showText: Bool, budget: TimeInterval?, finish: @escaping (String) -> Void) {
+        steps = []
+        var streamed = ""
+        let parser = EventParser(engine)
+        launch(args, budget: budget, streaming: { [weak self] line in
+            guard let self, isThinking else { return }
+            for event in parser.feed(line) {
+                switch event {
+                case .session(let id): sessionID = id
+                case .step(let step):
+                    steps.append(step)
+                    if !showText { stage = step.hasPrefix("$ ") ? "lance une commande" : step.prefix(1).lowercased() + step.dropFirst() }
+                case .text(let text):
+                    streamed += text
+                    if showText { phase = .streaming(streamed) }
+                case .final(let text): finish(text)
+                case .failure(let message): phase = .failed(message)
+                }
+                guard isThinking else { return }
+            }
+        }) { [weak self] _ in
+            guard let self, self.isThinking else { return }
+            let text = streamed.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty { phase = .failed("Aucune réponse.") } else { finish(text) }
+        }
+    }
+
+    /// Lance le fournisseur. `streaming` reçoit chaque ligne de sortie au fil de l'eau (sur le fil principal),
+    /// `handle` la sortie complète à la fin (code 0 uniquement). `budget` : arrêt forcé au-delà (en secondes).
+    private func launch(_ args: [String], budget: TimeInterval? = nil, streaming: ((String) -> Void)? = nil,
+                        then handle: @escaping (String) -> Void) {
+        guard let binary = engine.binary else {
+            phase = .failed("\(engine.title) introuvable dans le PATH.")
             return
         }
         let process = Process()
@@ -458,21 +556,68 @@ final class AgentRun: ObservableObject {
                     handle(text)
                 } else {
                     let detail = errors.split(separator: "\n").suffix(4).joined(separator: "\n")
-                    self.phase = .failed(p.terminationReason == .uncaughtSignal ? "Annulé."
-                        : (detail.isEmpty ? "Hermes a quitté avec le code \(p.terminationStatus)." : detail))
+                    self.phase = .failed(p.terminationReason == .uncaughtSignal ? (self.timedOut ? "Trop long : arrêté." : "Annulé.")
+                        : (detail.isEmpty ? "\(self.engine.title) a quitté avec le code \(p.terminationStatus)." : detail))
                 }
             }
         }
         do {
             try process.run()
             self.process = process
+            if let budget {
+                DispatchQueue.main.asyncAfter(deadline: .now() + budget) { [weak self, weak process] in
+                    guard let self, let process, process.isRunning else { return }
+                    timedOut = true
+                    process.terminate()
+                }
+            }
         } catch {
             phase = .failed(error.localizedDescription)
         }
     }
 
+    private var timedOut = false
+
     func cancel() {
         if process?.isRunning == true { process?.terminate() }
+    }
+}
+
+/// Hermes a fini pendant que Hello était fermé : une notification, et un clic rouvre la conversation.
+final class AgentNotifier: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = AgentNotifier()
+    /// Hors d'un .app (binaire lancé par `swift run`), le centre de notifications fait planter le processus.
+    private let available = Bundle.main.bundleURL.pathExtension == "app"
+
+    func install() {
+        guard available else { return }
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    func post(_ run: AgentRun) {
+        guard available else { return }
+        let content = UNMutableNotificationContent()
+        let text: String
+        switch run.phase {
+        case .answer(let answer): content.title = "\(run.engine.title) a répondu"; text = answer
+        case .done(let summary): content.title = "\(run.engine.title) a terminé"; text = summary
+        case .failed(let message): content.title = "\(run.engine.title) n'a pas pu répondre"; text = message
+        default: return
+        }
+        content.subtitle = run.request
+        content.body = String(text.replacingOccurrences(of: "\n", with: " ").prefix(180))
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: "hermes-\(UUID().uuidString)", content: content, trigger: nil)
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            if granted { center.add(request) }
+        }
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        DispatchQueue.main.async { Controller.shared.show() }
+        completionHandler()
     }
 }
 
@@ -508,37 +653,55 @@ extension LauncherModel {
         guard Hermes.available else { return [] }
         let marks = explicit ? q.prefix { $0 == "?" }.count : 0
         let request = explicit ? String(q.dropFirst(marks)).trimmingCharacters(in: .whitespaces) : q
+        if request.isEmpty && !attachments.isEmpty {
+            let what = attachments.count > 1 ? "ces \(attachments.count) fichiers"
+                : attachments[0].isScreenshot ? "cette capture" : "« \(attachments[0].name) »"
+            let ask = "Qu'est-ce que c'est ? Décris et analyse " + (attachments.count > 1 ? "les pièces jointes." : "la pièce jointe.")
+            return [ResultItem(id: "agent.attachments", section: "Agent", title: "Demander à \(AgentEngine.assistant.name) d'analyser \(what)",
+                               subtitle: "Ou écris ce qu'il doit en faire · ⌫ retire le dernier fichier",
+                               icon: .symbol("paperclip", .purple),
+                               primary: ItemAction(title: "Analyser") { [unowned self] in startAgent(ask, level: .fast) },
+                               secondary: ItemAction(title: "Recherche & Action") { [unowned self] in startAgent(ask, level: .work) })]
+        }
         guard !request.isEmpty else {
-            return [ResultItem(id: "agent.hint", section: "Agent", title: "Demande n'importe quoi à Hermes",
-                               subtitle: "Luna choisit le niveau · « ?? » force la recherche · « ??? » force le terminal",
-                               icon: .symbol("sparkles", .purple), primary: ItemAction(title: "OK") {})]
+            // « ? » seul : l'invite, puis les dernières conversations à reprendre.
+            let recent = ChatStore.shared.conversations.prefix(4).map { chatItem($0, section: "Conversations récentes") }
+            let all = ChatStore.shared.conversations.count > 4
+                ? [ResultItem(id: "agent.chats", section: "Conversations récentes", title: "Toutes les conversations",
+                              subtitle: "\(ChatStore.shared.conversations.count) conversations avec l'IA",
+                              icon: .symbol("bubble.left.and.text.bubble.right", .purple),
+                              primary: ItemAction(title: "Ouvrir") { [unowned self] in enter(.chats) })]
+                : []
+            return [ResultItem(id: "agent.hint", section: "Agent", title: "Demande n'importe quoi à \(AgentEngine.assistant.name)",
+                               subtitle: "Auto : Luna choisit le niveau · « ?? » Recherche & Action · « ??? » Code · ⌘O fichier · ⇧⌘S capture",
+                               icon: .symbol("sparkles", .purple), primary: ItemAction(title: "OK") {})] + recent + all
         }
         let item = { [unowned self] (level: AgentLevel) -> ResultItem in
             ResultItem(
                 id: "agent\(level.rawValue):" + request, section: "Agent",
-                title: level == .quick ? "Demander à Hermes : \(request)" : "\(level.title) : \(request)",
+                title: level == .fast ? "Demander à \(AgentEngine.assistant.name) : \(request)" : "\(level.title) : \(request)",
                 subtitle: "\(level.detail) · \(level.modelLabel)",
                 icon: .symbol(level.symbol, level.tint), accessory: "Niveau \(level.rawValue)",
-                primary: ItemAction(title: level == .quick ? "Demander" : level.title) { [unowned self] in
+                primary: ItemAction(title: level == .fast ? "Demander" : level.title) { [unowned self] in
                     startAgent(request, level: level)
                 },
-                secondary: level == .quick ? ItemAction(title: "Forcer Recherche") { [unowned self] in
-                    startAgent(request, level: .research)
+                secondary: level == .fast ? ItemAction(title: "Recherche & Action") { [unowned self] in
+                    startAgent(request, level: .work)
                 } : nil,
-                tertiary: level == .quick ? ItemAction(title: "Forcer Approfondi") { [unowned self] in
-                    startAgent(request, level: .deep)
+                tertiary: level == .fast ? ItemAction(title: "Code") { [unowned self] in
+                    startAgent(request, level: .code)
                 } : nil,
                 copyText: request)
         }
         // Par défaut Luna décide ; « ?? » et « ??? » forcent un niveau.
-        return [item(AgentLevel(rawValue: min(max(marks, 1), 3)) ?? .quick)]
+        return [item(AgentLevel(rawValue: min(max(marks, 1), 3)) ?? .fast)]
     }
 
     func startAgent(_ request: String, level: AgentLevel) {
-        let run = AgentRun(request: request, level: level)
+        let run = AgentRun(request: request, level: level, attachments: attachments)
         enter(.agent)
         attachAgent(run)
         run.start()
-        if level == .deep { c.hide() }
+        if level == .code { c.hide() }
     }
 }

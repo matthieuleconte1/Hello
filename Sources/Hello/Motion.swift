@@ -3,7 +3,7 @@ import SwiftUI
 /// Signature de mouvement d'un style : comment le panneau s'ouvre, comment les lignes arrivent,
 /// comment on passe d'un écran à l'autre et comment il s'efface quand on lance une app.
 enum RevealStyle {
-    /// Verre : léger ressort vers le bas, flou qui se met au point, reflet sur le bord.
+    /// Verre : le panneau naît d'une goutte sous la barre de recherche qui gonfle jusqu'à la fenêtre, flou qui se met au point.
     case glass
     /// Atelier (Material 3 Expressive) : le panneau se déploie depuis la barre de recherche, lignes en vagues.
     case unfold
@@ -17,7 +17,8 @@ enum RevealStyle {
     /// Ce qui caractérise le mouvement du style (affiché dans Réglages › Animations).
     var summary: String {
         switch self {
-        case .glass: "ressort léger, flou qui se met au point et reflet lumineux qui fait le tour du bord."
+        case .glass: "le panneau naît d'une goutte d'eau sous la barre de recherche, qui gonfle, s'étale jusqu'à la "
+            + "fenêtre et ondule en se posant. Le flou se met au point et un reflet lumineux fait le tour du bord."
         case .unfold: "ressorts Material 3 Expressive. Le panneau se déploie depuis la barre de recherche, les résultats "
             + "arrivent en vagues et les pastilles changent de forme quand on les sélectionne."
         case .crt: "allumage cathodique avec scintillement, résultats affichés ligne par ligne et curseur qui clignote. "
@@ -42,7 +43,7 @@ enum RevealStyle {
     /// Ouverture du panneau. `light` : réouverture rapide, version écourtée.
     func open(light: Bool) -> Animation {
         switch self {
-        case .glass: light ? .snappy(duration: 0.14) : .spring(response: 0.26, dampingFraction: 0.74)
+        case .glass: light ? .snappy(duration: 0.14) : .spring(response: 0.46, dampingFraction: 0.7)
         case .unfold: light ? .spring(response: 0.22, dampingFraction: 0.86) : .spring(response: 0.44, dampingFraction: 0.72)
         case .crt: light ? .easeOut(duration: 0.1) : .timingCurve(0.2, 0.9, 0.3, 1, duration: 0.34)
         case .page: light ? .easeOut(duration: 0.14) : .spring(response: 0.48, dampingFraction: 0.84)
@@ -132,12 +133,15 @@ struct PanelMotion: ViewModifier {
         let close = Motion.scaled(reveal.close)
         switch reveal {
         case .glass:
+            // La goutte grossit avec le ressort d'ouverture ; elle doit être visible tout de suite, d'où un fondu
+            // à part, bien plus court. Réouverture rapide : pas de goutte, juste un petit ressort.
             content
+                .mask(DropletShape(progress: hidden && !light ? 0 : 1, cornerRadius: PanelLayout.radius))
                 .scaleEffect(closing ? 0.985 : 1)
                 .animation(close, value: closing)
-                .scaleEffect(hidden ? 1 - 0.05 * k : 1, anchor: .top)
-                .offset(y: hidden ? -12 * k : 0)
-                .opacity(hidden ? 0 : 1)
+                .scaleEffect(hidden ? 1 - 0.12 * k : 1, anchor: UnitPoint(x: 0.5, y: 0.07))
+                .animation(shown ? Motion.scaled(.easeOut(duration: 0.1)) : nil) { $0.opacity(hidden ? 0 : 1) }
+                .modifier(LiquidWobble(trigger: revealID, active: !light))
         case .unfold:
             content
                 .scaleEffect(closing ? 1 + 0.02 * k : 1)
@@ -278,6 +282,61 @@ struct OpeningEffect: View {
                 // Joué sous le panneau, avec l'ombre pleine (StampShadow).
                 EmptyView()
             }
+        }
+    }
+}
+
+/// Verre : la goutte d'où naît le panneau. À 0, une petite goutte sous la barre de recherche ; elle s'étale
+/// d'abord en largeur puis coule vers le bas (la hauteur suit le carré de la progression). À 1, la forme déborde
+/// largement du panneau : le masque ne coupe plus rien, pas même l'ombre.
+struct DropletShape: Shape {
+    var progress: CGFloat
+    let cornerRadius: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let bleed: CGFloat = 100
+        let seed: CGFloat = 44
+        let p = max(0, progress)
+        let wide = p, tall = p * p
+        let width = seed + (rect.width + 2 * bleed - seed) * wide
+        let height = seed + (rect.height + 2 * bleed - seed) * tall
+        let start = min(30, rect.height / 2) - seed / 2
+        let top = start + (-bleed - start) * wide
+        let radius = min(seed / 2 + (cornerRadius + bleed - seed / 2) * p, min(width, height) / 2)
+        let frame = CGRect(x: rect.midX - width / 2, y: top, width: width, height: height)
+        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: frame)
+    }
+}
+
+/// Verre : la goutte se pose. Elle s'étire en hauteur en finissant de couler, s'étale en touchant sa place,
+/// puis reprend sa forme en une oscillation amortie. Le volume est conservé (largeur × hauteur constant)
+/// et l'ancre reste en haut : la barre de recherche ne bouge pas verticalement, l'œil n'a rien à rattraper.
+struct LiquidWobble: ViewModifier {
+    let trigger: Int
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if active && Motion.enabled {
+            let t = 1 / Motion.speed
+            let k = 0.018 * Motion.amplitude
+            // < 0 : étiré en hauteur ; > 0 : étalé en largeur.
+            content.keyframeAnimator(initialValue: 0.0, trigger: trigger) { view, squash in
+                let x = 1 + k * squash
+                view.scaleEffect(x: x, y: 1 / x, anchor: .top)
+            } keyframes: { _ in
+                // Calé sur le ressort d'ouverture : la goutte atteint la taille de la fenêtre vers 0,3 s.
+                LinearKeyframe(0, duration: 0.12 * t)
+                CubicKeyframe(-0.6, duration: 0.12 * t)
+                CubicKeyframe(1, duration: 0.1 * t)
+                SpringKeyframe(0, duration: 0.8 * t, spring: .init(response: 0.42, dampingRatio: 0.5))
+            }
+        } else {
+            content
         }
     }
 }

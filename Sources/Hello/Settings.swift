@@ -332,6 +332,23 @@ final class AppSettings: ObservableObject {
     @Published var agentResearchReasoning = value("agentResearchReasoning", "medium") {
         didSet { Self.d.set(agentResearchReasoning, forKey: "agentResearchReasoning") }
     }
+    /// Mises à jour depuis les releases GitHub.
+    @Published var autoUpdateCheck = value("autoUpdateCheck", true) { didSet { Self.d.set(autoUpdateCheck, forKey: "autoUpdateCheck") } }
+    @Published var updatePrereleases = value("updatePrereleases", true) {
+        didSet { Self.d.set(updatePrereleases, forKey: "updatePrereleases") }
+    }
+    /// Fournisseur de chaque niveau : hermes, claude (Claude Code) ou codex.
+    @Published var agentRouterEngine = value("agentRouterEngine", "hermes") {
+        didSet { Self.d.set(agentRouterEngine, forKey: "agentRouterEngine") }
+    }
+    @Published var agentResearchEngine = value("agentResearchEngine", "hermes") {
+        didSet { Self.d.set(agentResearchEngine, forKey: "agentResearchEngine") }
+    }
+    @Published var agentDefaultEngine = value("agentDefaultEngine", "hermes") {
+        didSet { Self.d.set(agentDefaultEngine, forKey: "agentDefaultEngine") }
+    }
+    /// Garder les conversations avec Hermes (mode Conversations).
+    @Published var agentHistory = value("agentHistory", true) { didSet { Self.d.set(agentHistory, forKey: "agentHistory") } }
 
     @Published var customCommands: [CustomCommand] = {
         guard let data = d.data(forKey: "customCommands"),

@@ -68,6 +68,12 @@ struct LauncherView: View {
         .frame(width: size.width, height: size.height, alignment: .top)
         .clipShape(shape)
         .styledSurface(style, cornerRadius: PanelLayout.radius)
+        // Verre : clair au début de la goutte (on voit le bureau net à travers le fumé), puis il se givre en grandissant.
+        // Le givre suit l'élan de la goutte : un ressort qui part quand elle se pose (≈0,2 s). Réouverture rapide :
+        // pas d'animation, le verre est givré tout de suite.
+        .environment(\.glassFrost, GlassFrost(
+            value: shown || reveal != .glass ? 1 : 0,
+            animation: model.lightReveal ? nil : Motion.scaled(.spring(response: 0.22, dampingFraction: 0.9).delay(0.2))))
         .background {
             if let offset = style.hardShadow {
                 // L'ombre pleine « atterrit » avec le panneau, et reste en place quand il s'enfonce dessus au lancement.
@@ -93,6 +99,20 @@ struct LauncherView: View {
                           radius: PanelLayout.radius, pill: CGRect(x: 8, y: 7, width: size.width - 16, height: 46),
                           underline: CGRect(x: 48, y: 47, width: min(size.width * 0.45, 360), height: 0))
         }
+        .overlay {
+            if model.dropTargeted && Hermes.available && model.mode == .root {
+                shape.strokeBorder(style.accent, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+                    .overlay(alignment: .bottom) {
+                        Label("Lâche pour joindre à \(AgentEngine.assistant.name)", systemImage: "paperclip")
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Capsule().fill(.regularMaterial))
+                            .padding(.bottom, 52)
+                    }
+                    .allowsHitTesting(false)
+            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: $model.dropTargeted) { model.dropFiles($0) }
         .tint(style.accent)
         .modifier(PanelMotion(reveal: reveal, shown: shown, light: model.lightReveal,
                               closing: closing, revealID: model.revealID))
@@ -132,12 +152,19 @@ struct LauncherView: View {
                 .buttonStyle(.plain)
             }
 
-            if model.mode == .agent, let agent = model.agent {
+            // Pendant que Hermes travaille, la demande ; ensuite, le champ pour une question de suite.
+            if model.mode == .agent, let agent = model.agent, agent.isThinking {
                 Text(agent.request)
                     .font(style.font(16, .medium, title: true))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer()
+                if !agent.attachments.isEmpty {
+                    Label("\(agent.attachments.count)", systemImage: "paperclip")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .help(agent.attachments.map(\.name).joined(separator: "\n"))
+                }
                 if agent.isThinking { ProgressView().controlSize(.small) }
             } else if model.mode == .output, let run = model.run {
                 Text("$ " + run.command)
@@ -147,12 +174,12 @@ struct LauncherView: View {
                 Spacer()
                 RunStatus(run: run)
             } else {
-                SearchField(text: $model.query, placeholder: model.mode.placeholder)
+                SearchField(text: $model.query, placeholder: model.placeholder)
                     .frame(height: 34)
                     // Invite dessinée par SwiftUI : celle d'AppKit, pendant l'édition, se décale avec certaines polices.
                     .background(alignment: .leading) {
                         if model.query.isEmpty {
-                            Text(model.mode.placeholder)
+                            Text(model.placeholder)
                                 .font(Font(style.searchFont as CTFont))
                                 .foregroundStyle(Color(nsColor: style.placeholderNSColor))
                                 .lineLimit(1)
@@ -162,16 +189,12 @@ struct LauncherView: View {
                     }
                 if model.mode == .emoji { FilterPicker(model: model) }
                 if model.mode == .root {
-                    Button { model.enter(.apps) } label: {
-                        Image(systemName: Mode.apps.symbol)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(style.iconButton.map { AnyShapeStyle($0.ink) } ?? AnyShapeStyle(.secondary))
-                            .frame(width: style.iconButton != nil ? 34 : 30, height: style.iconButton != nil ? 34 : 30)
-                            .background { if let button = style.iconButton { Circle().fill(button.fill) } }
-                            .contentShape(Rectangle())
+                    if !model.attachments.isEmpty { AttachmentStrip(model: model) }
+                    if Hermes.available && (model.query.isEmpty || !model.attachments.isEmpty) {
+                        headerButton("paperclip", help: "Joindre des fichiers pour \(AgentEngine.assistant.name) (⌘O)") { model.pickFilesForAgent() }
+                        headerButton("camera.viewfinder", help: "Capture d'écran pour \(AgentEngine.assistant.name) (⇧⌘S)") { model.captureForAgent() }
                     }
-                    .buttonStyle(.plain)
-                    .help("Toutes les applications")
+                    headerButton(Mode.apps.symbol, help: "Toutes les applications") { model.enter(.apps) }
                 }
             }
         }
@@ -191,6 +214,20 @@ struct LauncherView: View {
         }
     }
 
+    private func headerButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        let style = StyleTokens.current
+        return Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(style.iconButton.map { AnyShapeStyle($0.ink) } ?? AnyShapeStyle(.secondary))
+                .frame(width: style.iconButton != nil ? 34 : 30, height: style.iconButton != nil ? 34 : 30)
+                .background { if let button = style.iconButton { Circle().fill(button.fill) } }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
     /// Contenu du mode, construit avec une copie de ses données (résultats, sélection) plutôt qu'en les relisant
     /// dans le modèle : pendant la transition, la vue qui s'en va garde les siennes. Sinon elle se redessinerait
     /// avec les résultats du nouveau mode (icônes chargées sur le fil principal en plein ressort → à-coup).
@@ -204,7 +241,12 @@ struct LauncherView: View {
         case .output:
             if let run = model.run { OutputView(run: run) }
         case .agent:
-            if let agent = model.agent { AgentView(run: agent) }
+            // « / » dans le champ de question de suite : la liste des commandes remplace un instant la conversation.
+            if model.query.hasPrefix("/") {
+                ResultList(model: model, mode: mode, items: model.items, selection: model.selection, clickActivates: true)
+            } else if let agent = model.agent {
+                AgentView(run: agent)
+            }
         case .clipboard, .colors, .stats:
             HStack(spacing: 0) {
                 ResultList(model: model, mode: mode, items: model.items, selection: model.selection, clickActivates: false)
@@ -414,7 +456,6 @@ struct AppGrid: View {
                             AppPage(model: model, items: items, selection: selection, page: index,
                                     selectionSpace: selectionSpace)
                                 .frame(width: geo.size.width, height: geo.size.height)
-                                .drawingGroup()
                                 .offset(x: CGFloat(index) * geo.size.width)
                         }
                     }
@@ -633,6 +674,8 @@ struct AppCell: View {
             if case .file(let path) = item.icon { icon.load(path) }
         }
         .onHover { inside in
+            // Pages en mouvement : les cases qui défilent sous la souris ne se soulèvent pas au passage.
+            let inside = inside && !PagerState.isMoving
             if hover.inside != inside { hover.inside = inside }
         }
     }
@@ -1152,34 +1195,51 @@ struct AgentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    levelBadge
+                    ForEach(run.earlier) { turn in
+                        PastTurn(turn: turn)
+                        StyleDivider()
+                    }
+                    if !run.isThinking || !run.earlier.isEmpty {
+                        Text(run.request)
+                            .font(.system(size: 14.5, weight: .semibold))
+                            .textSelection(.enabled)
+                    }
+                    HStack(spacing: 8) {
+                        levelBadge
+                        ForEach(run.attachments) { attachment in
+                            AttachmentThumb(attachment: attachment, size: 22)
+                        }
+                    }
                     switch run.phase {
                     case .thinking:
                         status("sparkles", .purple, "\(run.modelLabel) \(run.stage)…")
+                        stepList(running: true)
                         elapsed
                     case .streaming(let text):
                         status("sparkles", .purple, "\(run.modelLabel) répond…")
+                        stepList(running: true)
                         MarkdownText(text: text)
                         elapsed
                     case .done(let summary):
                         status("checkmark.circle.fill", .green, "Fait")
                         MarkdownText(text: summary)
+                        stepList(running: false)
                         if !run.details.isEmpty { promptBox(run.details) }
                     case .answer(let text):
                         status("text.bubble.fill", .blue, "Réponse de \(run.modelLabel)")
                         MarkdownText(text: text)
                     case .escalate(let prompt):
                         status("arrow.up.right.circle.fill", .orange, "Demande trop complexe pour le niveau rapide")
-                        Text("↵ pour la passer en Recherche (\(AgentLevel.research.modelLabel)), "
-                             + "⌘↵ pour une session approfondie dans \(Shell.terminal.name).")
+                        Text("↵ pour la passer en Recherche & Action (\(AgentLevel.work.modelLabel)), "
+                             + "⌘↵ pour une session de code dans \(Shell.terminal.name).")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                         promptBox(prompt)
                     case .delegated(let prompt):
                         status("arrow.up.forward.app.fill", .purple,
-                               "Envoyé à \(Hermes.defaultModelLabel) dans \(Shell.terminal.name)")
+                               "Envoyé à \(AgentLevel.code.modelLabel) dans \(Shell.terminal.name)")
                         promptBox(prompt)
                     case .failed(let message):
-                        status("exclamationmark.triangle.fill", .orange, "Hermes n'a pas pu répondre")
+                        status("exclamationmark.triangle.fill", .orange, "\(run.engine.title) n'a pas pu répondre")
                         Text(message).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
@@ -1189,17 +1249,47 @@ struct AgentView: View {
                 .padding(20)
             }
             .onChange(of: streamLength) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
+            // Conversation rouverte ou question de suite : on arrive sur le dernier échange.
+            .onAppear { if !run.earlier.isEmpty { proxy.scrollTo("end", anchor: .bottom) } }
         }
     }
 
     private var streamLength: Int {
         if case .streaming(let text) = run.phase { return text.count }
-        return 0
+        return run.steps.count
+    }
+
+    /// Ce que Hermes a fait (commandes, clics, lectures) ; la dernière étape tourne tant qu'il travaille.
+    @ViewBuilder private func stepList(running: Bool) -> some View {
+        if !run.steps.isEmpty {
+            let shown = Array(run.steps.suffix(8).enumerated())
+            let hidden = run.steps.count - shown.count
+            VStack(alignment: .leading, spacing: 5) {
+                if hidden > 0 {
+                    Text("+ \(hidden) étape\(hidden > 1 ? "s" : "") avant").foregroundStyle(.tertiary)
+                }
+                ForEach(shown, id: \.offset) { index, step in
+                    let current = running && index == shown.count - 1
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Image(systemName: current ? "circle.dotted" : "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(current ? AnyShapeStyle(.purple) : AnyShapeStyle(.tertiary))
+                            .symbolEffect(.pulse, isActive: current)
+                        Text(step)
+                            .font(step.hasPrefix("$ ") ? .system(size: 11.5, design: .monospaced) : .system(size: 12))
+                            .foregroundStyle(current ? .primary : .secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+            .font(.system(size: 12))
+        }
     }
 
     private var levelBadge: some View {
-        Label(run.isThinking && run.stage == "choisit le niveau" ? "Luna choisit le niveau…"
-              : run.level == .quick ? "Niveau 1 · Rapide" : "Niveau \(run.level.rawValue) · \(run.level.title)",
+        Label(run.isThinking && run.stage == "choisit le niveau" ? "Auto · choix du niveau…"
+              : "Niveau \(run.level.rawValue) · \(run.level.title)",
               systemImage: run.level.symbol)
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(run.level.tint)
@@ -1227,6 +1317,75 @@ struct AgentView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.quinary))
+    }
+}
+
+/// Échange précédent d'une conversation : la demande, puis la réponse, en plus discret que l'échange en cours.
+struct PastTurn: View {
+    let turn: ChatTurn
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(turn.request).font(.system(size: 13.5, weight: .semibold))
+                Spacer(minLength: 8)
+                Label(turn.agentLevel.title, systemImage: turn.agentLevel.symbol)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(turn.agentLevel.tint)
+            }
+            if turn.kind == .code {
+                Label("Envoyé à une session de code dans le terminal", systemImage: "arrow.up.forward.app")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            } else {
+                MarkdownText(text: turn.answer).opacity(0.8)
+            }
+        }
+        .textSelection(.enabled)
+    }
+}
+
+/// Pièces jointes dans la barre de recherche : vignettes, avec une croix pour en retirer une.
+struct AttachmentStrip: View {
+    @ObservedObject var model: LauncherModel
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(model.attachments.suffix(4)) { attachment in
+                AttachmentThumb(attachment: attachment, size: 30)
+                    .overlay(alignment: .topTrailing) {
+                        Button { model.detach(attachment) } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 12))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .black.opacity(0.65))
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: 5, y: -5)
+                        .help("Retirer")
+                    }
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
+            if model.attachments.count > 4 {
+                Text("+\(model.attachments.count - 4)").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            }
+        }
+        .animation(Motion.scaled(.spring(response: 0.3, dampingFraction: 0.7)), value: model.attachments)
+    }
+}
+
+struct AttachmentThumb: View {
+    let attachment: Attachment
+    let size: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+        Image(nsImage: attachment.thumbnail)
+            .resizable()
+            .aspectRatio(contentMode: attachment.isImage ? .fill : .fit)
+            .frame(width: size, height: size)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5))
+            .help(attachment.isScreenshot ? "Capture d'écran" : attachment.url.path)
     }
 }
 
@@ -1551,41 +1710,51 @@ struct GlassLook {
 }
 
 extension View {
-    /// Liquid Glass (macOS 26+) ou verre dépoli. Rien n'est posé entre le verre et le contenu : un voile de flou
-    /// dessiné ici passerait *par-dessus* le Liquid Glass (qui se dessine derrière la vue) et l'effacerait.
-    /// La teinte est celle du verre lui-même, elle ne fait que le colorer.
-    @ViewBuilder
+    /// Liquid Glass (macOS 26+) ou verre dépoli, posé derrière la vue. Rien n'est posé entre le verre et le
+    /// contenu : un voile de flou dessiné par-dessus le Liquid Glass l'effacerait.
     func glassPanel(cornerRadius radius: CGFloat, look: GlassLook = .current) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        Group {
+        return background { GlassSurface(shape: shape, look: look) }
+            .overlay {
+                if look.border { shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1).allowsHitTesting(false) }
+            }
+    }
+}
+
+/// Le verre lui-même. Avec `glassFrost` < 1 (ouverture du Verre), le flou s'efface et laisse voir le bureau net,
+/// mais le fumé reste : la teinte du verre est alors relayée par un simple aplat de la même couleur.
+private struct GlassSurface: View {
+    let shape: RoundedRectangle
+    let look: GlassLook
+    @Environment(\.glassFrost) private var frost
+
+    var body: some View {
+        ZStack {
             #if compiler(>=6.2)
             if #available(macOS 26.0, *), look.material != .frosted {
                 let glass: Glass = look.material == .clear ? .clear : .regular
-                if let tint = look.tint {
-                    glassEffect(glass.tint(tint), in: shape)
-                } else {
-                    glassEffect(glass, in: shape)
-                }
+                Color.clear
+                    .glassEffect(look.tint.map { glass.tint($0) } ?? glass, in: shape)
+                    .opacity(frost.value)
+                if let tint = look.tint { shape.fill(tint).opacity(1 - frost.value) }
             } else {
-                frostedGlass(shape, look: look)
+                frosted
             }
             #else
-            frostedGlass(shape, look: look)
+            frosted
             #endif
         }
-        .overlay {
-            if look.border { shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1).allowsHitTesting(false) }
-        }
+        // Le verre reste clair pendant que la goutte gonfle et se givre quand elle se pose, porté par l'élan du
+        // mouvement. À la fermeture, retour immédiat au verre clair (le panneau n'est déjà plus à l'écran).
+        .animation(frost.value >= 1 ? frost.animation : nil, value: frost)
     }
 
-    private func frostedGlass(_ shape: RoundedRectangle, look: GlassLook) -> some View {
-        background {
-            ZStack {
-                VisualEffectBackground(withinWindow: look.withinWindow).opacity(look.frostOpacity)
-                if let tint = look.tint { tint }
-            }
-            .clipShape(shape)
+    private var frosted: some View {
+        ZStack {
+            VisualEffectBackground(withinWindow: look.withinWindow).opacity(look.frostOpacity * frost.value)
+            if let tint = look.tint { tint }
         }
+        .clipShape(shape)
     }
 }
 

@@ -381,11 +381,28 @@ private struct RowSelectedKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+/// Flou du verre (0 : clair, seul le fumé reste ; 1 : rendu normal) et animation pour y aller.
+struct GlassFrost: Equatable {
+    var value = 1.0
+    var animation: Animation? = nil
+    static func == (a: GlassFrost, b: GlassFrost) -> Bool { a.value == b.value }
+}
+
+private struct GlassFrostKey: EnvironmentKey {
+    static let defaultValue = GlassFrost()
+}
+
 extension EnvironmentValues {
     /// L'élément qui contient la vue est sélectionné (pastilles d'icônes qui changent de forme).
     var rowSelected: Bool {
         get { self[RowSelectedKey.self] }
         set { self[RowSelectedKey.self] = newValue }
+    }
+
+    /// Flou du verre, animé à l'ouverture du Verre.
+    var glassFrost: GlassFrost {
+        get { self[GlassFrostKey.self] }
+        set { self[GlassFrostKey.self] = newValue }
     }
 
     /// Style des composants partagés (touches, sélection, icônes) : celui du panneau, ou celui d'une vignette.

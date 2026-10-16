@@ -2,11 +2,14 @@
 # ./build.sh          → compile build/Hello.app
 # ./build.sh install  → compile, copie dans /Applications et lance
 # ./build.sh dist     → binaire universel (Apple Silicon + Intel) empaqueté dans build/Hello-<version>.dmg
+# ./build.sh release  → comme dist, plus build/Hello-<version>.zip (ce que la mise à jour intégrée télécharge),
+#                       puis affiche la commande pour publier la release GitHub v<version>.
+#                       Version : clé HelloVersion de Resources/Info.plist.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 XCODE_DEV=/Applications/Xcode.app/Contents/Developer
-if [[ "${1:-}" == "dist" ]]; then
+if [[ "${1:-}" == "dist" || "${1:-}" == "release" ]]; then
     # Le build multi-architecture passe par xcbuild, fourni par Xcode.
     DEVELOPER_DIR="$XCODE_DEV" swift build -c release --arch arm64 --arch x86_64
     BIN="$(DEVELOPER_DIR="$XCODE_DEV" swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/Hello"
@@ -49,8 +52,8 @@ if [[ "${1:-}" == "install" ]]; then
     echo "✓ installé dans /Applications et lancé"
 fi
 
-if [[ "${1:-}" == "dist" ]]; then
-    VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+if [[ "${1:-}" == "dist" || "${1:-}" == "release" ]]; then
+    VERSION=$(/usr/libexec/PlistBuddy -c "Print :HelloVersion" Resources/Info.plist)
     DMG="build/Hello-$VERSION.dmg"
     STAGE=build/dmg
     rm -rf "$STAGE" "$DMG"
@@ -61,4 +64,16 @@ if [[ "${1:-}" == "dist" ]]; then
     hdiutil create -volname "Hello $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG" >/dev/null
     rm -rf "$STAGE"
     echo "✓ $DMG (à envoyer)"
+fi
+
+if [[ "${1:-}" == "release" ]]; then
+    ZIP="build/Hello-$VERSION.zip"
+    rm -f "$ZIP"
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    echo "✓ $ZIP"
+    # Une version avec suffixe (2.0.0-alpha.2) part en préversion.
+    PRE=""
+    [[ "$VERSION" == *-* ]] && PRE=" --prerelease"
+    echo "Pour publier (les Hello installés la proposeront ensuite) :"
+    echo "  gh release create v$VERSION $ZIP $DMG --title \"Hello $VERSION\" --generate-notes$PRE"
 fi

@@ -116,6 +116,10 @@ final class Controller: NSObject, NSWindowDelegate {
         apps.refresh()
         Shell.loadUserPath()
         Hermes.locate()
+        EngineStatus.locate()
+        Attachments.cleanUp()
+        AgentNotifier.shared.install()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { Updater.shared.checkIfDue() }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 3) { GlyphIndex.warm() }
 
         if AppSettings.shared.onboarded {
@@ -142,12 +146,15 @@ final class Controller: NSObject, NSWindowDelegate {
     func show(mode: Mode = .root) {
         cancelClosing()
         apps.refreshIfStale()
-        // Hello a été masqué par autre chose que toi (fenêtre système, alerte, autre app) : on reprend où on en était.
-        if mode == .root && Date() < resumeUntil {
+        // Hello a été masqué par autre chose que toi (fenêtre système, alerte, autre app), ou Hermes travaille
+        // (ou a fini) en arrière-plan : on reprend où on en était.
+        if mode == .root && (Date() < resumeUntil || model.agentInBackground) {
             model.resume()
         } else {
             model.reset(to: mode)
         }
+        model.markAgentSeen()
+        Updater.shared.checkIfDue()
         resumeUntil = .distantPast
         position()
         applyStyle()
@@ -157,7 +164,9 @@ final class Controller: NSObject, NSWindowDelegate {
         guard !wasVisible else { return }
         // Ouverture "snappy" : petit ressort rapide (échelle + fondu), rendu par le GPU.
         // Rouvert moins de 6 s après la dernière ouverture : version allégée (plus courte, sans reflet ni cascade).
-        let light = Date().timeIntervalSince(lastReveal) < 6
+        // Le Verre rejoue sa goutte à chaque ouverture, sauf si on rouvre aussitôt (aller-retour au raccourci).
+        let window: TimeInterval = AppSettings.shared.panelStyle == .glass ? 1.5 : 6
+        let light = Date().timeIntervalSince(lastReveal) < window
         lastReveal = Date()
         if let animation = Motion.scaled(AppSettings.shared.panelStyle.reveal.open(light: light)) {
             withAnimation(animation) { model.setPresented(true, light: light) }

@@ -21,7 +21,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .motion: "Animations"
         case .search: "Recherche & Terminal"
         case .commands: "Commandes perso"
-        case .agent: "Agent (Hermes)"
+        case .agent: "Agent IA"
         case .clipboard: "Presse-papiers & Emoji"
         case .stats: "Statistiques"
         case .permissions: "Permissions"
@@ -36,7 +36,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .motion: "Chaque style a ses propres animations : ouverture, arrivée des résultats, navigation et lancement."
         case .search: "Classement des résultats, commandes shell, terminal et éditeur utilisés."
         case .commands: "Tes mots-clés avec argument : « gh apple/swift », « yt lofi »…"
-        case .agent: "Hermes répond, cherche ou code pour toi, avec le modèle adapté à la demande."
+        case .agent: "L'IA répond, cherche ou code pour toi, avec le fournisseur et le modèle adaptés à chaque niveau."
         case .clipboard: "Historique du presse-papiers, collage direct et emoji."
         case .stats: "Ce que tu ouvres le plus, et les raccourcis que Hello a appris."
         case .permissions: "Ce dont Hello a besoin, et rien de plus."
@@ -294,6 +294,7 @@ struct PermissionChecklist: View {
 /// Vérification de l'agent IA (Hermes), réutilisée par l'onboarding et les réglages.
 struct AgentChecklist: View {
     @ObservedObject private var hermes = HermesStatus.shared
+    @ObservedObject private var engines = EngineStatus.shared
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
@@ -319,24 +320,43 @@ struct AgentChecklist: View {
                     }
                 }
             }
+            ForEach([AgentEngine.claude, .codex]) { engine in
+                PermissionRow(symbol: engine == .claude ? "asterisk" : "chevron.left.forwardslash.chevron.right",
+                              tint: engine == .claude ? .orange : .teal, title: engine.title,
+                              detail: engine.binary.map { "Installé : \($0)" }
+                                  ?? "Optionnel : un autre fournisseur possible pour chaque niveau, avec ton compte "
+                                  + (engine == .claude ? "Claude." : "ChatGPT."),
+                              ok: engine.installed, optional: true) {
+                    if !engine.installed {
+                        Button("Installer dans \(Shell.terminal.name)") { Shell.runInTerminal(engine.installCommand) }
+                    }
+                }
+            }
             PermissionRow(symbol: "cpu", tint: .orange, title: "Modèles utilisés",
-                          detail: "Rapide : \(AgentLevel.quick.modelLabel)\nRecherche : \(AgentLevel.research.modelLabel)\n"
-                              + "Approfondi : \(AgentLevel.deep.modelLabel)",
-                          ok: !hermes.providers.isEmpty, optional: true) {
+                          detail: "Fast : \(AgentLevel.fast.modelLabel)\nRecherche & Action : \(AgentLevel.work.modelLabel)\n"
+                              + "Code : \(AgentLevel.code.modelLabel)",
+                          ok: AgentLevel.allCases.allSatisfy { $0.config.engine.installed }, optional: true) {
                 EmptyView()
             }
             HStack {
                 Toggle("Activer l'agent dans Hello", isOn: $settings.agentEnabled).toggleStyle(.switch)
                 Spacer()
                 if hermes.checking { ProgressView().controlSize(.small) }
-                Button("Revérifier") { Hermes.locate() }.disabled(hermes.checking)
+                Button("Revérifier") {
+                    Hermes.locate()
+                    EngineStatus.locate()
+                }.disabled(hermes.checking)
             }
         }
         .controlSize(.small)
-        .onAppear { Hermes.locate() }
+        .onAppear {
+            Hermes.locate()
+            EngineStatus.locate()
+        }
         // Retour du Terminal après l'installation ou la connexion : on revérifie.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Hermes.locate()
+            EngineStatus.locate()
         }
     }
 
@@ -437,7 +457,7 @@ struct OnboardingView: View {
                 Feature(symbol: "terminal", tint: .gray, title: "Terminal", text: "« cd ./code » ouvre un dossier, « > commande » l'exécute.")
                 Feature(symbol: "face.smiling", tint: .orange, title: "Emoji & Unicode", text: "Recherche en français, collage direct.")
                 Feature(symbol: "doc.on.clipboard", tint: .cyan, title: "Presse-papiers", text: "Tout ce que tu copies, retrouvable.")
-                Feature(symbol: "sparkles", tint: .purple, title: "Assistant IA", text: "« ? ta demande » : réponse, action ou recherche, via Hermes.")
+                Feature(symbol: "sparkles", tint: .purple, title: "Assistant IA", text: "« ? ta demande » : réponse, action ou recherche, via Hermes, Claude Code ou Codex.")
                 Feature(symbol: "eyedropper.halffull", tint: .pink, title: "Pipette & plus", text: "Couleurs, barre des menus, désinstallation propre.")
             }
             .padding(.top, 8)
@@ -716,6 +736,7 @@ private struct GeneralSettings: View {
             } footer: {
                 Text("Sans icône dans la barre des menus, relance Hello depuis le Finder pour ouvrir le panneau.")
             }
+            UpdateSettings()
             Section {
                 Button("Afficher les données dans le Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([ClipboardHistory.dir])
@@ -1136,9 +1157,83 @@ private struct SearchSettings: View {
     }
 }
 
+/// Réglages › Général › Mises à jour.
+private struct UpdateSettings: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var updater = Updater.shared
+
+    var body: some View {
+        Section {
+            LabeledContent("Version installée", value: Updater.currentVersion)
+            Toggle("Vérifier automatiquement (une fois par jour)", isOn: $settings.autoUpdateCheck)
+            Toggle("Inclure les préversions (alpha, bêta)", isOn: $settings.updatePrereleases)
+            HStack {
+                Text(status).foregroundStyle(.secondary)
+                Spacer()
+                if updater.busy { ProgressView().controlSize(.small) }
+                if let release = updater.pending, !updater.busy {
+                    Button("Notes") { NSWorkspace.shared.open(release.page) }
+                    Button("Installer \(release.version)") { updater.install() }.keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Rechercher maintenant") { updater.check() }.disabled(updater.busy)
+                }
+            }
+        } header: { Text("Mises à jour") } footer: {
+            Text("Hello cherche les nouvelles versions dans les releases GitHub de \(Updater.repo), télécharge l'app, "
+                 + "la remplace et se relance. Tes réglages, ton historique et tes conversations sont gardés.")
+        }
+    }
+
+    private var status: String {
+        switch updater.state {
+        case .idle: "Pas encore vérifié."
+        case .checking: "Recherche…"
+        case .upToDate: "Hello est à jour."
+        case .available(let release): "Hello \(release.version) est disponible."
+        case .downloading(let progress): "Téléchargement… \(Int(progress * 100)) %"
+        case .installing: "Installation… Hello va se relancer."
+        case .failed(let message): "Échec : \(message)"
+        }
+    }
+}
+
 private struct AgentSettings: View {
     @ObservedObject private var settings = AppSettings.shared
-    private let levels = ["none", "minimal", "low", "medium", "high", "xhigh"]
+    @ObservedObject private var chats = ChatStore.shared
+    @ObservedObject private var engines = EngineStatus.shared
+
+    /// Fournisseur, modèle et raisonnement d'un niveau. Changer de fournisseur reprend le réglage proposé pour lui.
+    @ViewBuilder
+    private func levelControls(_ level: AgentLevel, provider: Binding<String>, model: Binding<String>,
+                               reasoning: Binding<String>) -> some View {
+        let engine = level.config.engine
+        Picker("Fournisseur", selection: Binding(get: { engine }, set: { level.setEngine($0) })) {
+            ForEach(AgentEngine.allCases) { option in
+                Text(option.installed ? option.title : "\(option.title) (non installé)").tag(option)
+            }
+        }
+        if engine == .hermes {
+            modelPicker("Modèle", provider: provider, model: model, allowDefault: true)
+        } else {
+            let known = engine.models
+            let choices = model.wrappedValue.isEmpty || known.contains(where: { $0.id == model.wrappedValue })
+                ? known : [ModelChoice(id: model.wrappedValue, name: model.wrappedValue)] + known
+            Picker("Modèle", selection: model) {
+                Text("Défaut de \(engine.title)").tag("")
+                ForEach(choices, id: \.id) { Text($0.name).tag($0.id) }
+            }
+        }
+        Picker("Raisonnement", selection: reasoning) {
+            Text("Défaut").tag("")
+            ForEach(engine.reasoningLevels, id: \.self) { Text($0).tag($0) }
+            if !reasoning.wrappedValue.isEmpty && !engine.reasoningLevels.contains(reasoning.wrappedValue) {
+                Text(reasoning.wrappedValue).tag(reasoning.wrappedValue)
+            }
+        }
+        if !engine.installed {
+            Button("Installer \(engine.title) dans \(Shell.terminal.name)") { Shell.runInTerminal(engine.installCommand) }
+        }
+    }
 
     /// Menu groupé par provider ; la sélection est « provider|modèle ».
     private func modelPicker(_ title: String, provider: Binding<String>, model: Binding<String>, allowDefault: Bool) -> some View {
@@ -1170,58 +1265,62 @@ private struct AgentSettings: View {
             Section {
                 AgentChecklist().padding(.vertical, 4)
             } footer: {
-                Text("Tape « ? ta demande » (ou une phrase) : Luna choisit le niveau — réponse ou action immédiate, "
-                     + "recherche dans Hello, ou session approfondie dans le terminal. ⌘↵ / « ?? » force la Recherche, "
-                     + "⌥↵ / « ??? » force l'Approfondi.")
-            }
-            Section("Luna · routeur et niveau 1") {
-                modelPicker("Modèle", provider: $settings.agentRouterProvider, model: $settings.agentRouterModel, allowDefault: true)
-                Picker("Raisonnement", selection: $settings.agentRouterReasoning) {
-                    ForEach(levels, id: \.self) { Text($0).tag($0) }
-                }
-                Picker("Comportement", selection: $settings.agentStrategy) {
-                    Text("Choisir le niveau selon la demande").tag("auto")
-                    Text("Toujours reformuler pour le terminal").tag("delegate")
-                    Text("Toujours agir lui-même").tag("act")
-                }
+                Text("Tape « ? ta demande » (ou une phrase). En Auto, le niveau 1 répond tout de suite (Fast) ou "
+                     + "passe la main au niveau 2 · Recherche & Action (web et actions sur le Mac, réponse dans Hello) ou "
+                     + "au niveau 3 · Code (session dans le terminal). ⌘↵ / « ?? » force le niveau 2, ⌥↵ / « ??? » le niveau 3. "
+                     + "Tape « / » pour les commandes : /resume, /new, /retry, /code, /terminal, /copy…")
             }
             Section {
-                Picker("Préréglage", selection: Binding(
-                    get: { "\(settings.agentResearchProvider)|\(settings.agentResearchModel)|\(settings.agentResearchReasoning)" },
-                    set: { value in
-                        let parts = value.split(separator: "|").map(String.init)
-                        guard parts.count == 3 else { return }
-                        settings.agentResearchProvider = parts[0]
-                        settings.agentResearchModel = parts[1]
-                        settings.agentResearchReasoning = parts[2]
-                    })) {
-                    Text("Claude Sonnet 5.5 · medium").tag("anthropic|claude-sonnet-5-5|medium")
-                    Text("GPT-6.1 Sol · low").tag("openai-codex|gpt-6.1-sol|low")
-                    let custom = "\(settings.agentResearchProvider)|\(settings.agentResearchModel)|\(settings.agentResearchReasoning)"
-                    if !["anthropic|claude-sonnet-5-5|medium", "openai-codex|gpt-6.1-sol|low"].contains(custom) {
-                        Text("Personnalisé").tag(custom)
-                    }
+                levelControls(.fast, provider: $settings.agentRouterProvider, model: $settings.agentRouterModel,
+                              reasoning: $settings.agentRouterReasoning)
+                Picker("Mode", selection: $settings.agentStrategy) {
+                    Text("Auto : choisir le niveau selon la demande").tag("auto")
+                    Text("Toujours Recherche & Action").tag("act")
+                    Text("Toujours Code").tag("delegate")
                 }
-                modelPicker("Modèle", provider: $settings.agentResearchProvider, model: $settings.agentResearchModel, allowDefault: true)
-                Picker("Raisonnement", selection: $settings.agentResearchReasoning) {
-                    ForEach(levels, id: \.self) { Text($0).tag($0) }
-                }
-            } header: { Text("Niveau 2 · Recherche") } footer: {
-                Text("Cherche sur le web et répond directement dans Hello, en direct. ⌘↵ sur la réponse reprend la conversation dans le terminal.")
+            } header: { Text("Niveau 1 · Fast / Auto") } footer: {
+                Text("Répond seul aux questions simples, sans aucun outil. Pour le reste, il reformule ta demande "
+                     + "et la confie au niveau 2 ou 3. Prends un modèle rapide : Luna (Hermes ou Codex), Haiku (Claude Code).")
             }
             Section {
-                modelPicker("Modèle", provider: $settings.agentDefaultProvider, model: $settings.agentDefaultModel, allowDefault: true)
-                Picker("Raisonnement", selection: $settings.agentDefaultReasoning) {
-                    Text("Défaut de Hermes").tag("")
-                    ForEach(levels, id: \.self) { Text($0).tag($0) }
-                }
+                levelControls(.work, provider: $settings.agentResearchProvider, model: $settings.agentResearchModel,
+                              reasoning: $settings.agentResearchReasoning)
+            } header: { Text("Niveau 2 · Recherche & Action") } footer: {
+                Text("Cherche sur le web et agit sur le Mac (terminal, AppleScript, Raccourcis, captures d'écran), puis répond "
+                     + "dans Hello, en direct. Il ne clique jamais à ta place et laisse la dernière étape des actions "
+                     + "irréversibles. 5 min maximum. Joins des fichiers avec ⌘O ou ⌘V, une capture avec ⇧⌘S. "
+                     + "⌘↵ sur la réponse reprend la conversation dans le terminal. " + workSafety)
+            }
+            Section {
+                levelControls(.code, provider: $settings.agentDefaultProvider, model: $settings.agentDefaultModel,
+                              reasoning: $settings.agentDefaultReasoning)
                 TextField("Dossier de travail", text: $settings.agentWorkdir)
-            } header: { Text("Niveau 3 · Approfondi (terminal)") } footer: {
-                Text("Ouvert dans \(Shell.terminal.name) (Réglages › Recherche & Terminal) avec une session Hermes interactive. "
-                     + "Le routeur classe d'abord ta demande sans aucun outil. Il n'exécute lui-même que les actions rapides, "
-                     + "avec terminal, fichiers et web, 8 étapes et 60 s maximum, sans confirmation : les actions destructrices "
-                     + "lui sont interdites et partent au modèle par défaut.")
+            } header: { Text("Niveau 3 · Code (terminal)") } footer: {
+                Text("Ouvert dans \(Shell.terminal.name) (Réglages › Recherche & Terminal) avec une session interactive du fournisseur, "
+                     + "dans le dossier de travail, pour écrire du code, créer une app ou un script, ou tout travail long sur un projet.")
             }
+            Section {
+                Toggle("Garder l'historique des conversations", isOn: $settings.agentHistory)
+                Button("Effacer les \(chats.conversations.count) conversations") {
+                    if confirm("Effacer toutes les conversations avec l'IA ?", button: "Effacer") { chats.clear() }
+                }
+                .disabled(chats.conversations.isEmpty)
+            } header: { Text("Mémoire") } footer: {
+                Text("Sous une réponse, tape une question de suite : l'IA reçoit les échanges précédents, quel que soit le "
+                     + "fournisseur. Les conversations se retrouvent avec « ? », « /resume » ou la commande « Conversations avec "
+                     + "l'IA », et sont gardées sur ce Mac (200 au plus). Hermes peut aussi noter dans sa propre mémoire ce "
+                     + "qu'il apprend de toi.")
+            }
+        }
+        .onAppear { EngineStatus.locate() }
+    }
+
+    /// Ce que le fournisseur du niveau 2 a le droit de faire sans demander.
+    private var workSafety: String {
+        switch AgentLevel.work.config.engine {
+        case .hermes: "Hermes bloque lui-même les commandes dangereuses."
+        case .claude: "Claude Code n'a que le terminal, la lecture de fichiers et le web ; rm, sudo et git push lui sont refusés."
+        case .codex: "Codex travaille dans son bac à sable : il n'écrit que dans le dossier de travail, avec accès au réseau."
         }
     }
 }
