@@ -233,6 +233,8 @@ final class AppSettings: ObservableObject {
     @Published var animationSpeed = value("animationSpeed", 1.0) { didSet { Self.d.set(animationSpeed, forKey: "animationSpeed") } }
     @Published var cascadeRows = value("cascadeRows", true) { didSet { Self.d.set(cascadeRows, forKey: "cascadeRows") } }
     @Published var launchEffects = value("launchEffects", true) { didSet { Self.d.set(launchEffects, forKey: "launchEffects") } }
+    /// Glyphe : textes et icônes qui se décodent en ASCII (à l'ouverture et pendant l'utilisation).
+    @Published var asciiDecode = value("asciiDecode", true) { didSet { Self.d.set(asciiDecode, forKey: "asciiDecode") } }
 
     // Mise en page
     @Published var rowDensity = RowDensity(rawValue: value("rowDensity", "standard")) ?? .standard {

@@ -43,7 +43,7 @@ enum Mode: Equatable {
 
     var placeholder: String {
         switch self {
-        case .root: "Rechercher une app, une commande… ou cd ~/dossier"
+        case .root: "Rechercher une app ou une commande…"
         case .apps: "Rechercher une application…"
         case .emoji: "Rechercher un emoji ou un symbole…"
         case .clipboard: "Rechercher dans l'historique…"
@@ -54,14 +54,14 @@ enum Mode: Equatable {
         case .uninstall: "Quelle application désinstaller ?"
         case .uninstallFiles: "Filtrer les fichiers…"
         case .stats: "Rechercher une app…"
-        case .agent: "Question de suite…"
+        case .agent: "Poser une autre question…"
         case .chats: "Rechercher dans les conversations avec l'IA…"
         }
     }
 
     var emptyText: String {
         switch self {
-        case .clipboard: "L'historique est vide — copiez quelque chose !"
+        case .clipboard: "Copiez un élément pour le retrouver ici"
         case .chats: "Aucune conversation avec l'IA pour l'instant"
         case .emoji: "Aucun caractère trouvé"
         default: "Aucun résultat"
@@ -127,7 +127,12 @@ enum ActionKind { case primary, secondary, tertiary }
 
 final class LauncherModel: ObservableObject {
     @Published var query = "" {
-        didSet { if query != oldValue && !muted { selection = 0; update() } }
+        didSet {
+            if query != oldValue {
+                escapeConfirmation.reset()
+                if !muted { selection = 0; update() }
+            }
+        }
     }
     @Published private(set) var mode: Mode = .root
     @Published private(set) var items: [ResultItem] = []
@@ -144,8 +149,7 @@ final class LauncherModel: ObservableObject {
     @Published private(set) var attachments: [Attachment] = []
     /// Un fichier glissé survole le panneau.
     @Published var dropTargeted = false
-    /// Premier Échap pendant que Hermes travaille : un second avant cette date annule la requête.
-    private var cancelArmedUntil = Date.distantPast
+    private var escapeConfirmation = EscapeConfirmation()
     /// Hermes a fini pendant que Hello était fermé : la prochaine ouverture montre sa réponse.
     private var unseenAgentResult = false
 
@@ -203,6 +207,7 @@ final class LauncherModel: ObservableObject {
     // MARK: - Navigation
 
     func reset(to newMode: Mode) {
+        escapeConfirmation.reset()
         mode = newMode
         appsRevealed = true
         swipe = nil
@@ -252,7 +257,7 @@ final class LauncherModel: ObservableObject {
             appPageRange = 0...1
             swipe = nil
             c.morphPanel(toApps: true)
-            appsRevealed = !(AppSettings.shared.animations && presented)
+            appsRevealed = !(Motion.enabled && presented)
         }
         navigate(forward: true) {
             mode = newMode
@@ -275,6 +280,7 @@ final class LauncherModel: ObservableObject {
     private(set) var revealDate: Date?
 
     func setPresented(_ value: Bool, light: Bool = false) {
+        if !value { escapeConfirmation.reset() }
         if value && !presented {
             lightReveal = light
             if !light {
@@ -299,17 +305,20 @@ final class LauncherModel: ObservableObject {
 
     func attachAgent(_ run: AgentRun) {
         agent = run
-        cancelArmedUntil = .distantPast
+        escapeConfirmation.reset()
         agentWatch = run.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         // Fermer Hello ne l'arrête pas : s'il finit pendant ce temps, une notification prévient.
         run.onFinish = { [weak self] run in
-            guard let self, run === agent, !presented else { return }
+            guard let self, run === agent else { return }
+            escapeConfirmation.reset()
+            guard !presented else { return }
             unseenAgentResult = true
             AgentNotifier.shared.post(run)
         }
     }
 
     func back() {
+        escapeConfirmation.reset()
         run?.cancel()
         run = nil
         agent?.cancel()
@@ -453,13 +462,14 @@ final class LauncherModel: ObservableObject {
     // MARK: - Clavier
 
     func handleKey(_ event: NSEvent) -> Bool {
+        if Int(event.keyCode) != kVK_Escape { escapeConfirmation.reset() }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let cmd = flags.contains(.command)
         let grid = mode == .emoji || mode == .apps
 
         switch Int(event.keyCode) {
         case kVK_Escape:
-            escape()
+            if !event.isARepeat { escape() }
             return true
         case kVK_DownArrow where mode == .apps:
             moveInPage(appColumns)
@@ -596,18 +606,17 @@ final class LauncherModel: ObservableObject {
             if run?.running == true { run?.cancel() } else { back() }
         case .agent:
             if agent?.isThinking == true {
-                // Deux fois Échap pour annuler : une seule pression ne doit pas perdre une longue requête.
-                if Date() < cancelArmedUntil {
-                    cancelArmedUntil = .distantPast
+                if escapeConfirmation.press(.cancel) {
                     agent?.cancel()
                 } else {
-                    cancelArmedUntil = Date().addingTimeInterval(2.5)
-                    flash("Échap encore pour annuler · ⌘W la laisse tourner en arrière-plan")
+                    flash("Encore Échap pour arrêter · ⌘W pour masquer")
                 }
             } else if !query.isEmpty {
                 setQuery("")
-            } else {
+            } else if escapeConfirmation.press(.leave) {
                 back()
+            } else {
+                flash("Encore Échap pour revenir à la recherche")
             }
         default:
             query.isEmpty ? back() : setQuery("")
@@ -713,11 +722,11 @@ final class LauncherModel: ObservableObject {
             case .answer?:
                 return [Hint(label: "Copier", key: "↵"),
                         Hint(label: agent?.level == .work ? "Continuer dans le terminal" : "Recherche & Action", key: "⌘↵"),
-                        Hint(label: "Retour", key: "esc")]
+                        Hint(label: "Retour", key: "esc esc")]
             case .escalate?:
                 return [Hint(label: "Recherche & Action", key: "↵"), Hint(label: "Code (terminal)", key: "⌘↵"),
-                        Hint(label: "Annuler", key: "esc")]
-            default: return [Hint(label: "Fermer", key: "↵"), Hint(label: "Retour", key: "esc")]
+                        Hint(label: "Retour", key: "esc esc")]
+            default: return [Hint(label: "Fermer", key: "↵"), Hint(label: "Retour", key: "esc esc")]
             }
         case .output:
             let running = run?.running == true
@@ -857,7 +866,7 @@ final class LauncherModel: ObservableObject {
     /// Ouvre l'app tout de suite ; Hello prend sa couleur pendant qu'il s'efface (sans rien retarder).
     private func launch(_ app: AppEntry, query: String) {
         Usage.record(app.id, query: query)
-        let effects = AppSettings.shared.animations && AppSettings.shared.launchEffects
+        let effects = Motion.enabled && AppSettings.shared.launchEffects
         c.hide(tint: effects ? IconColor.dominant(app.path) : nil)
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
@@ -1074,7 +1083,7 @@ final class LauncherModel: ObservableObject {
     private func followSelection() {
         let page = selection / appsPerPage
         guard page != appPage else { return }
-        let animate = AppSettings.shared.animations && presented
+        let animate = Motion.enabled && presented
         // Les pages traversées sont préparées avant de lancer le ressort.
         let range = min(appPage, page)...max(appPage, page)
         if !animate {
@@ -1086,7 +1095,7 @@ final class LauncherModel: ObservableObject {
         let slide = { [self] in
             guard mode == .apps, selection / appsPerPage == page else { return }
             let remaining = (-CGFloat(page) - pager.position) * c.panelSize.width
-            withAnimation(pageAnimation(remaining: remaining)) { pager.settle(page: page) }
+            withAnimation(Motion.scaled(pageAnimation(remaining: remaining))) { pager.settle(page: page) }
             appPage = page
             // Une fois le ressort posé, on ne garde que la page et ses deux voisines.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
@@ -1156,7 +1165,7 @@ final class LauncherModel: ObservableObject {
                 pager.rootSwipe = 0
                 enter(.apps)
             } else {
-                withAnimation(AppSettings.shared.animations ? pageSpring : nil) { pager.rootSwipe = 0 }
+                withAnimation(Motion.scaled(pageSpring)) { pager.rootSwipe = 0 }
             }
             return true
         }
@@ -1207,7 +1216,7 @@ final class LauncherModel: ObservableObject {
             } else {
                 let remaining = (-CGFloat(appPage) - pager.position) * width
                 let animation = pageAnimation(remaining: remaining)
-                withAnimation(AppSettings.shared.animations ? animation : nil) { pager.settle(page: appPage) }
+                withAnimation(Motion.scaled(animation)) { pager.settle(page: appPage) }
             }
             return true
         }

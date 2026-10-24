@@ -438,7 +438,7 @@ struct OnboardingView: View {
     }
 
     private func go(_ newStep: Int) {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { state.step = newStep }
+        withAnimation(Motion.scaled(.spring(response: 0.35, dampingFraction: 0.85))) { state.step = newStep }
     }
 
     private func finish() {
@@ -781,13 +781,13 @@ private struct AppearanceSettings: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
                     ForEach(PanelStyle.allCases) { style in
                         StyleCard(style: style, selected: settings.panelStyle == style) {
-                            withAnimation(.snappy(duration: 0.25)) { settings.panelStyle = style }
+                            withAnimation(Motion.scaled(.snappy(duration: 0.25))) { settings.panelStyle = style }
                         }
                     }
                 }
                 .padding(.vertical, 6)
             } header: { Text("Style") } footer: {
-                Text(settings.panelStyle.detail + " Aussi depuis Hello : tape « style ».")
+                Text(settings.panelStyle.detail)
             }
 
             switch settings.panelStyle {
@@ -801,7 +801,7 @@ private struct AppearanceSettings: View {
                         settings.phosphorColor = PhosphorColor(rawValue: id) ?? .green
                     }
                 } header: { Text("Phosphore") } footer: {
-                    Text("La couleur des vieux écrans : vert P1 des terminaux, ambre P3 des Minitel et IBM 5151, blanc P4 des télés.")
+                    Text("Vert, ambre, blanc ou cyan.")
                 }
             case .paper:
                 Section("Papier") {
@@ -822,8 +822,7 @@ private struct AppearanceSettings: View {
             Section {
                 Toggle("Mode focus", isOn: $settings.focusMode)
             } header: { Text("Ouverture") } footer: {
-                Text("Seulement la barre de recherche à l'ouverture : les résultats apparaissent dès que tu tapes, "
-                     + "comme Spotlight. Aussi depuis Hello : tape « focus ».")
+                Text("Les résultats apparaissent dès que tu tapes.")
             }
 
             Section {
@@ -876,7 +875,7 @@ private struct AppearanceSettings: View {
                     Button("Ouvrir le panneau") { Controller.shared.show() }
                     Spacer()
                     Button("Rétablir l'apparence par défaut") {
-                        withAnimation(.snappy(duration: 0.25)) { settings.resetAppearance() }
+                        withAnimation(Motion.scaled(.snappy(duration: 0.25))) { settings.resetAppearance() }
                     }
                 }
             }
@@ -897,8 +896,7 @@ private struct AppearanceSettings: View {
             .padding(.vertical, 6)
             Toggle("Inverser les deux accents", isOn: $settings.atelierSwap)
         } header: { Text("Couleurs") } footer: {
-            Text("Le premier accent colore le bouton, la touche ↵ et la sélection en couleur ; le second, les pastilles "
-                 + "d'icônes. Le reste reste neutre. Aussi depuis Hello : tape « couleurs ».")
+            Text("Premier accent : actions et sélection. Second accent : icônes.")
         }
 
         Section("Atelier") {
@@ -919,7 +917,7 @@ private struct AppearanceSettings: View {
                                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(settings.atelierShape == shape ? Color.primary.opacity(0.12) : .clear))
                                 .rotationEffect(.degrees(settings.atelierShape == shape ? 20 : 0))
-                                .animation(StyleTokens.Atelier.spring, value: settings.atelierShape)
+                                .animation(Motion.scaled(StyleTokens.Atelier.spring), value: settings.atelierShape)
                         }
                         .buttonStyle(.plain)
                         .help(shape.title)
@@ -968,10 +966,7 @@ private struct AppearanceSettings: View {
             }
             .disabled(!night && !settings.glyphAutoNight && settings.glyphAppearance != .night)
         } header: { Text("Nuit") } footer: {
-            Text((night ? "La Nuit est active. " : "")
-                 + "Tout passe en un seul rouge sur noir pour préserver la vision nocturne : la forme prend le relais "
-                 + "de la couleur (rempli = choisi, au trait = disponible), les icônes d'apps virent au rouge et rien "
-                 + "ne s'éclaire d'une autre couleur. L'heure est vérifiée à chaque ouverture de Hello.")
+            Text("Rouge sur noir. Rempli : sélectionné. Au trait : disponible. Horaire vérifié à chaque ouverture.")
         }
     }
 
@@ -989,7 +984,7 @@ private struct AppearanceSettings: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 14) {
                 ForEach(LookPreset.all) { preset in
                     PresetCard(preset: preset, selected: settings.matches(preset)) {
-                        withAnimation(.snappy(duration: 0.25)) { settings.apply(preset) }
+                        withAnimation(Motion.scaled(.snappy(duration: 0.25))) { settings.apply(preset) }
                     }
                 }
             }
@@ -1126,7 +1121,7 @@ private struct LookPreview: View {
             .environment(\.colorScheme, .dark)
         }
         .frame(height: 250)
-        .animation(.snappy(duration: 0.25), value: settings.cornerRadius)
+        .animation(Motion.scaled(.snappy(duration: 0.25)), value: settings.cornerRadius)
     }
 
     @ViewBuilder
@@ -1604,9 +1599,15 @@ private struct MotionSettings: View {
                 Toggle("Résultats qui arrivent en cascade", isOn: $settings.cascadeRows)
                 Toggle("Effet d'ouverture du style", isOn: $settings.haloSweep)
                 Toggle("Effets au lancement d'une app", isOn: $settings.launchEffects)
+                if settings.panelStyle == .glyph {
+                    Toggle("Décodage ASCII des textes et des icônes", isOn: $settings.asciiDecode)
+                }
             } header: { Text("Effets") } footer: {
                 Text("À l'ouverture, en \(settings.panelStyle.title) : \(settings.panelStyle.reveal.effect) "
-                     + "Au lancement, Hello prend la couleur de l'app ouverte et s'efface à la manière de son style.")
+                     + "Au lancement, Hello prend la couleur de l'app ouverte et s'efface à la manière de son style."
+                     + (settings.panelStyle == .glyph
+                        ? " Textes et icônes se décodent en ASCII en apparaissant, puis, plus brièvement, en tapant et à chaque sélection."
+                        : ""))
             }
             .disabled(!settings.animations)
 
@@ -1621,6 +1622,7 @@ private struct MotionSettings: View {
                         settings.cascadeRows = true
                         settings.haloSweep = true
                         settings.launchEffects = true
+                        settings.asciiDecode = true
                     }
                 }
             }

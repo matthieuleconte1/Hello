@@ -185,7 +185,7 @@ final class Controller: NSObject, NSWindowDelegate {
         resumeUntil = .distantPast
         // La Nuit de Glyphe ne s'éclaire jamais d'une autre couleur que son rouge.
         let tint = tint.map { StyleTokens.current.launchTint.map(NSColor.init) ?? $0 }
-        guard let tint else {
+        guard let tint, Motion.enabled else {
             panel.orderOut(nil)
             model.setPresented(false)
             return
@@ -193,9 +193,9 @@ final class Controller: NSObject, NSWindowDelegate {
         closeCount += 1
         let id = closeCount
         closing = id
-        withAnimation(.easeOut(duration: 0.07)) { model.setClosingTint(tint) }
+        withAnimation(Motion.scaled(.easeOut(duration: 0.07))) { model.setClosingTint(tint) }
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.22
+            context.duration = 0.22 / Motion.speed
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
@@ -278,8 +278,8 @@ final class Controller: NSObject, NSWindowDelegate {
     func morphPanel(toApps: Bool) {
         guard let screen else { return }
         let target = local(panelFrame(apps: toApps, on: screen), in: panel.frame)
-        guard panel.isVisible, AppSettings.shared.animations else { return model.setPanelRect(target) }
-        withAnimation(Self.morphSpring) { model.setPanelRect(target) }
+        guard panel.isVisible, Motion.enabled else { return model.setPanelRect(target) }
+        withAnimation(Motion.scaled(Self.morphSpring)) { model.setPanelRect(target) }
     }
 
     private static let morphSpring = Animation.spring(response: 0.44, dampingFraction: 0.84)
@@ -289,11 +289,11 @@ final class Controller: NSObject, NSWindowDelegate {
         guard panel.isVisible, closing == nil, model.mode != .apps, let screen, let current = model.panelRect else { return }
         let target = local(panelFrame(apps: false, on: screen), in: panel.frame)
         guard abs(current.height - target.height) > 0.5 || abs(current.width - target.width) > 0.5 else { return }
-        guard AppSettings.shared.animations else { return model.setPanelRect(target) }
+        guard Motion.enabled else { return model.setPanelRect(target) }
         // La largeur change : c'est le retour depuis la grille d'applications (déclenché ici, pendant la navigation,
         // avant morphPanel) — même ressort que l'aller, sinon le retour part sur le ressort court des résultats.
         let morphing = abs(current.width - target.width) > 0.5
-        withAnimation(morphing ? Self.morphSpring : .spring(response: 0.3, dampingFraction: 0.88)) {
+        withAnimation(Motion.scaled(morphing ? Self.morphSpring : .spring(response: 0.3, dampingFraction: 0.88))) {
             model.setPanelRect(target)
         }
     }

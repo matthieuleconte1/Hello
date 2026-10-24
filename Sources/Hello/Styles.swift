@@ -20,14 +20,12 @@ enum PanelStyle: String, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
-        case .glass: "Liquid Glass ou verre dépoli, réglable ci-dessous."
-        case .atelier: "Material 3 Expressive : barre de recherche en pilule, listes segmentées, formes qui se transforment, "
-            + "Google Sans Flex et ressorts. Cadre noir, cartes blanches et deux couleurs signal au choix."
-        case .glyph: "Un noir chaud et une seule couleur : panneau en retrait dans un cadre noir, sélection inversée, "
-            + "libellés en chasse fixe, logo en points et ressorts. La Nuit passe tout dans un seul rouge."
-        case .phosphor: "Écran cathodique : vert phosphore, tout en chasse fixe, sélection en vidéo inverse."
-        case .paper: "Papier crème, titres à empattements, filets fins et marque-page vermillon."
-        case .brutal: "Crème, gros contours noirs, ombres pleines et couleurs franches qui rebondissent."
+        case .glass: "Verre transparent ou dépoli, teinte réglable."
+        case .atelier: "Recherche en pilule, listes segmentées et deux accents."
+        case .glyph: "Cadre noir, accent unique et sélection inversée."
+        case .phosphor: "Écran cathodique et caractères en chasse fixe."
+        case .paper: "Papier, titres à empattements et filets fins."
+        case .brutal: "Contours noirs, ombres pleines et couleurs franches."
         }
     }
 
@@ -219,8 +217,8 @@ struct StyleTokens {
     var sectionRule: Color?
     /// Couleur imposée à l'effet de lancement (au lieu de celle de l'app) : la Nuit ne s'éclaire qu'en rouge.
     var launchTint: Color?
-    /// Titres des résultats qui se décodent en arrivant (Glyphe).
-    var decodeTitles = false
+    /// Textes et icônes qui se décodent en ASCII en apparaissant (Glyphe).
+    var asciiReveal = false
 
     var tile: TileStyle = .tinted
     /// Icônes d'apps monochromes (Phosphore).
@@ -450,7 +448,7 @@ struct StyleTokens {
             paneBorder: dark ? g.frameLine : nil,
             keyFill: g.frameHi, keyInk: g.onFrame.opacity(0.62), keyBorder: Color.white.opacity(0.14),
             primaryKeyFill: frameAccent, primaryKeyInk: mono ? g.frame : onAccent, monoKeys: true,
-            decodeTitles: true,
+            asciiReveal: true,
             tile: .glyph(rest: dark ? g.ctrl : g.ctrlLight, ink: ink,
                          selected: mono ? selectionInk : accent, selectedInk: mono ? selection : onAccent, stroke: nil),
             motion: g.spring)
@@ -476,7 +474,7 @@ struct StyleTokens {
             strongMeta: true,
             keyFill: .clear, keyInk: red, keyBorder: line,
             primaryKeyFill: red, primaryKeyInk: .black, monoKeys: true,
-            chromeCaps: true, sectionRule: g.redLine(0.32), launchTint: red, decodeTitles: true,
+            chromeCaps: true, sectionRule: g.redLine(0.32), launchTint: red, asciiReveal: true,
             tile: .glyph(rest: .clear, ink: red, selected: .black, selectedInk: red, stroke: line),
             iconTint: red, motion: g.spring)
     }
@@ -764,7 +762,7 @@ struct SymbolTile: View {
                     .symbolVariant(selected ? .fill : .none))
                 .padding(1)
                 .scaleEffect(selected ? 1.06 : 1)
-                .animation(StyleTokens.Glyph.spring, value: selected)
+                .animation(Motion.scaled(StyleTokens.Glyph.spring), value: selected)
         }
     }
 }
@@ -969,7 +967,7 @@ struct PaletteSwatch: View {
                 .padding(3)
                 .overlay(Circle().strokeBorder(selected ? Color.primary : .clear, lineWidth: 2))
                 .rotationEffect(.degrees(selected ? 90 : 0))
-                .animation(StyleTokens.Atelier.spring, value: selected)
+                .animation(Motion.scaled(StyleTokens.Atelier.spring), value: selected)
                 Text(palette.title)
                     .font(.system(size: 11, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? .primary : .secondary)

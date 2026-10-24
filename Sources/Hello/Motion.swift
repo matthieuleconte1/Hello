@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Signature de mouvement d'un style : comment le panneau s'ouvre, comment les lignes arrivent,
@@ -123,9 +124,16 @@ enum RevealStyle {
 
 /// Réglages globaux du mouvement (Réglages › Animations).
 enum Motion {
-    static var enabled: Bool { AppSettings.shared.animations }
+    static var enabled: Bool {
+        AppSettings.shared.animations && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
     static var amplitude: CGFloat { AppSettings.shared.motionIntensity.amplitude }
-    static var speed: Double { AppSettings.shared.animationSpeed }
+    /// Glyphe : textes et icônes se décodent en ASCII en apparaissant (Réglages › Animations).
+    static var decodes: Bool { enabled && AppSettings.shared.asciiDecode && StyleTokens.current.asciiReveal }
+    static var speed: Double {
+        let value = AppSettings.shared.animationSpeed
+        return value.isFinite ? min(max(value, 0.5), 2) : 1
+    }
 
     /// Animation à la vitesse réglée, ou nil si les animations sont coupées.
     static func scaled(_ animation: Animation?) -> Animation? {
@@ -144,7 +152,8 @@ struct PanelMotion: ViewModifier {
 
     func body(content: Content) -> some View {
         let k = Motion.amplitude * (light ? 0.35 : 1)
-        let hidden = !shown
+        let hidden = !shown && Motion.enabled
+        let closing = closing && Motion.enabled
         let close = Motion.scaled(reveal.close)
         switch reveal {
         case .glass:
@@ -245,15 +254,16 @@ struct CRTFlicker: ViewModifier {
 
     func body(content: Content) -> some View {
         if active && Motion.enabled {
+            let t = 1 / Motion.speed
             content.keyframeAnimator(initialValue: 1.0, trigger: trigger) { view, value in
                 view.opacity(value)
             } keyframes: { _ in
                 KeyframeTrack {
-                    LinearKeyframe(1, duration: 0.32)
-                    LinearKeyframe(0.55, duration: 0.03)
-                    LinearKeyframe(1, duration: 0.04)
-                    LinearKeyframe(0.8, duration: 0.03)
-                    LinearKeyframe(1, duration: 0.06)
+                    LinearKeyframe(1, duration: 0.32 * t)
+                    LinearKeyframe(0.55, duration: 0.03 * t)
+                    LinearKeyframe(1, duration: 0.04 * t)
+                    LinearKeyframe(0.8, duration: 0.03 * t)
+                    LinearKeyframe(1, duration: 0.06 * t)
                 }
             }
         } else {
@@ -267,10 +277,14 @@ struct BlinkingCursor: View {
     var height: CGFloat = 15
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.53)) { context in
-            Rectangle()
-                .frame(width: height * 0.55, height: height)
-                .opacity(Int(context.date.timeIntervalSinceReferenceDate / 0.53) % 2 == 0 ? 1 : 0)
+        if Motion.enabled {
+            TimelineView(.periodic(from: .now, by: 0.53)) { context in
+                Rectangle()
+                    .frame(width: height * 0.55, height: height)
+                    .opacity(Int(context.date.timeIntervalSinceReferenceDate / 0.53) % 2 == 0 ? 1 : 0)
+            }
+        } else {
+            Rectangle().frame(width: height * 0.55, height: height)
         }
     }
 }
@@ -492,25 +506,42 @@ struct DotWave: View {
 
 /// Glyphe : le titre se décode à sa place, de gauche à droite. Chaque lettre monte en densité (. : = # @),
 /// passe par quelques glyphes puis se fige — le « Décodage » de l'artifact. `start` nil ou passé : texte tel quel.
+/// `quick` : la version brève de l'utilisation (résultat qui arrive en tapant, ligne qu'on sélectionne).
 struct DecodeText: View {
     let text: String
     let start: Date?
+    var quick = false
+    @StateObject private var reveal = RevealDone()
 
-    private static let ramp = Array(".:-=+*#%@")
-    private static let glyphs = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#%&*+=?/")
+    static let ramp = Array(".:-=+*#%@")
+    static let glyphs = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#%&*+=?/")
 
     var body: some View {
-        if let start, case let end = start.addingTimeInterval(Self.duration(text) / Motion.speed), Date() < end {
-            TimelineView(DecodeSchedule(end: end)) { context in
-                Text(Self.frame(text, progress: context.date.timeIntervalSince(start) / end.timeIntervalSince(start)))
+        let duration = Self.duration(text, quick: quick) / Motion.speed
+        Group {
+            if Motion.enabled, let start, reveal.date != start,
+               case let end = start.addingTimeInterval(duration), Date() < end {
+                // Le titre garde sa largeur finale pendant le décodage ; VoiceOver lit le texte complet.
+                Text(text).opacity(0)
+                    .overlay(alignment: .leading) {
+                        TimelineView(DecodeSchedule(end: end)) { context in
+                            Text(Self.frame(text, progress: context.date.timeIntervalSince(start) / duration))
+                        }
+                        .accessibilityHidden(true)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(text)
+            } else {
+                Text(text)
             }
-        } else {
-            Text(text)
         }
+        .task(id: start) { await reveal.finish(start, after: duration) }
     }
 
-    /// Les titres longs prennent un peu plus de temps, sans dépasser 0,6 s.
-    static func duration(_ text: String) -> TimeInterval { min(0.3 + Double(text.count) * 0.012, 0.6) }
+    /// Les titres longs prennent un peu plus de temps, sans dépasser 0,6 s (0,3 s pour la version brève).
+    static func duration(_ text: String, quick: Bool = false) -> TimeInterval {
+        quick ? min(0.16 + Double(text.count) * 0.006, 0.3) : min(0.3 + Double(text.count) * 0.012, 0.6)
+    }
 
     /// Le texte à `progress` (0 à 1) : chaque lettre a sa fenêtre, décalée de gauche à droite.
     static func frame(_ text: String, progress: Double) -> String {
@@ -526,13 +557,19 @@ struct DecodeText: View {
                 out.append(char)
             } else if phase < 0 {
                 out.append(" ")
-            } else if phase < 0.45 {
-                out.append(ramp[min(ramp.count - 1, Int(phase / 0.45 * Double(ramp.count)))])
             } else {
-                out.append(glyphs[Int(noise(i, 0, tick) * Double(glyphs.count)) % glyphs.count])
+                out.append(symbol(phase: phase, i, 0, tick))
             }
         }
         return out
+    }
+
+    /// Caractère d'une lettre (ou d'une case d'icône) en cours de décodage : la rampe de densité,
+    /// puis des glyphes qui défilent jusqu'à ce qu'elle se fige.
+    static func symbol(phase: Double, _ a: Int, _ b: Int, _ tick: Int) -> Character {
+        phase < 0.45
+            ? ramp[min(ramp.count - 1, Int(max(phase, 0) / 0.45 * Double(ramp.count)))]
+            : glyphs[Int(noise(a, b, tick) * Double(glyphs.count)) % glyphs.count]
     }
 
     /// Bruit déterministe dans [0, 1) : le même point (ou la même lettre) garde sa valeur pendant un « tick ».
@@ -544,12 +581,170 @@ struct DecodeText: View {
     }
 }
 
-/// Images du décodage : 30 par seconde jusqu'à la fin, puis plus rien (la vue ne redessine plus).
+/// Fin d'un décodage (@State n'est pas disponible sans Xcode complet). Une TimelineView finie peut sauter sa
+/// dernière image sous charge : le temps écoulé, on impose l'état final.
+@MainActor final class RevealDone: ObservableObject {
+    @Published private(set) var date: Date?
+
+    func finish(_ start: Date?, after duration: TimeInterval) async {
+        guard let start, Motion.enabled else { return }
+        let remaining = max(0, start.addingTimeInterval(duration).timeIntervalSinceNow)
+        do { try await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000)) }
+        catch { return }
+        guard !Task.isCancelled else { return }
+        date = start
+    }
+}
+
+/// Glyphe : l'icône se décode comme les titres. Une trame de cases la recouvre ; chacune monte en densité,
+/// passe par quelques glyphes puis laisse voir l'image, en diagonale depuis le coin haut gauche, avec un peu
+/// de hasard. Seuls le masque et le calque changent : l'icône elle-même n'est jamais recréée (ni rechargée).
+struct AsciiReveal: ViewModifier {
+    let cue: DecodeCue?
+    @StateObject private var reveal = RevealDone()
+
+    func body(content: Content) -> some View {
+        if StyleTokens.current.asciiReveal && AppSettings.shared.asciiDecode {
+            let start = cue?.start
+            let duration = (cue?.quick == true ? 0.24 : 0.42) / Motion.speed
+            let end = start?.addingTimeInterval(duration) ?? .distantPast
+            let running = Motion.enabled && start != nil && reveal.date != start && Date() < end
+            content
+                .mask {
+                    if running, let start {
+                        TimelineView(DecodeSchedule(end: end)) { context in
+                            let progress = context.date.timeIntervalSince(start) / duration
+                            Canvas { g, size in Self.draw(&g, size: size, progress: progress, mask: true) }
+                        }
+                    } else {
+                        Rectangle()
+                    }
+                }
+                .overlay {
+                    if running, let start {
+                        TimelineView(DecodeSchedule(end: end)) { context in
+                            let progress = context.date.timeIntervalSince(start) / duration
+                            Canvas { g, size in Self.draw(&g, size: size, progress: progress, mask: false) }
+                        }
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                    }
+                }
+                .task(id: start) { await reveal.finish(start, after: duration) }
+        } else {
+            content
+        }
+    }
+
+    /// `mask` : les cases déjà décodées (l'image s'y montre) ; sinon, les caractères des cases en cours.
+    /// Cases d'environ 5 pt, entre 4 et 9 par côté.
+    private static func draw(_ g: inout GraphicsContext, size: CGSize, progress p: Double, mask: Bool) {
+        let n = max(4, min(9, Int((min(size.width, size.height) / 5).rounded())))
+        let w = size.width / CGFloat(n), h = size.height / CGFloat(n)
+        let window = 0.45
+        let tick = Int(max(p, 0) * 26)
+        let font = Font.system(size: h * 1.2, weight: .bold, design: .monospaced)
+        var resolved: [Character: GraphicsContext.ResolvedText] = [:]
+        for row in 0..<n {
+            for column in 0..<n {
+                let order = Double(column + row) / Double(2 * (n - 1))
+                let settle = window + (1 - window) * (0.7 * order + 0.3 * DecodeText.noise(column, row, 7))
+                let cell = CGRect(x: CGFloat(column) * w, y: CGFloat(row) * h, width: w, height: h)
+                if p >= settle {
+                    // Un rien plus grandes : pas de joint entre deux cases voisines.
+                    if mask { g.fill(Path(cell.insetBy(dx: -0.5, dy: -0.5)), with: .color(.black)) }
+                    continue
+                }
+                let phase = (p - settle + window) / window
+                guard !mask, phase >= 0 else { continue }
+                let char = DecodeText.symbol(phase: phase, column, row, tick)
+                let text = resolved[char] ?? g.resolve(Text(String(char)).font(font))
+                resolved[char] = text
+                g.draw(text, at: CGPoint(x: cell.midX, y: cell.midY), anchor: .center)
+            }
+        }
+    }
+}
+
+/// Glyphe : un décodage à jouer, sur un titre ou une icône. `quick` : la version brève de l'utilisation.
+struct DecodeCue: Equatable {
+    let start: Date
+    var quick = false
+}
+
+/// Glyphe : quand chaque élément d'une liste ou d'une grille se décode. À l'ouverture complète, tous dans la
+/// cascade ; ensuite, en version brève, ceux qui arrivent (en tapant, en changeant d'écran) et celui qu'on
+/// sélectionne. Lu et tenu à jour pendant le rendu, sans @Published : il n'en redemande pas.
+final class DecodeClock: ObservableObject {
+    private var reveal: Date?
+    private var seen: [String: DecodeCue] = [:]
+    private var selected: String?
+    private var selectedAt: Date?
+
+    /// L'arrivée de chaque élément. `reveal` : début de l'ouverture complète (nil : réouverture rapide,
+    /// cascade coupée) ; `columns` : grille, la cascade avance d'une rangée à la fois.
+    func arrivals(_ ids: [String], selected: String?, reveal: Date?, columns: Int = 1) -> [DecodeCue] {
+        let now = Date()
+        var next: [String: DecodeCue] = [:]
+        if let reveal, reveal != self.reveal, now.timeIntervalSince(reveal) < 0.5 {
+            for (i, id) in ids.enumerated() where next[id] == nil {
+                next[id] = DecodeCue(start: reveal.addingTimeInterval(RevealStyle.waveDelay(i / max(columns, 1)) / Motion.speed))
+            }
+            selectedAt = nil
+        } else {
+            // Les nouveaux venus se décodent presque ensemble, avec un léger décalage de haut en bas.
+            for (i, id) in ids.enumerated() where next[id] == nil {
+                let order = Double(min(i / max(columns, 1), 12))
+                next[id] = seen[id] ?? DecodeCue(start: now.addingTimeInterval(order * 0.018 / Motion.speed), quick: true)
+            }
+            if let selected, self.selected != nil, selected != self.selected { selectedAt = now }
+        }
+        self.reveal = reveal
+        self.selected = selected
+        seen = next
+        return ids.map { next[$0]! }
+    }
+
+    /// L'arrivée d'un élément, ou son nouveau décodage s'il vient d'être sélectionné.
+    func cue(_ arrival: DecodeCue, id: String) -> DecodeCue {
+        guard id == selected, let selectedAt, selectedAt > arrival.start else { return arrival }
+        return DecodeCue(start: selectedAt, quick: true)
+    }
+}
+
+/// Glyphe : un texte qui se décode, en version brève, à son apparition et à chaque changement (pied de page,
+/// invite de recherche, état vide). Dans les autres styles, un simple Text.
+struct LiveDecodeText: View {
+    let text: String
+    @StateObject private var clock = TextClock()
+
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        DecodeText(text: text, start: Motion.decodes ? clock.start(for: text) : nil, quick: true)
+    }
+}
+
+/// Moment où le texte affiché a changé (lu pendant le rendu, sans @Published).
+final class TextClock: ObservableObject {
+    private var text: String?
+    private var date = Date.distantPast
+
+    func start(for text: String) -> Date {
+        if text != self.text {
+            self.text = text
+            date = Date()
+        }
+        return date
+    }
+}
+
+/// Images du décodage : 30 par seconde jusqu'à la fin, sans replanifier une date passée.
 struct DecodeSchedule: TimelineSchedule {
     let end: Date
 
     func entries(from date: Date, mode: TimelineScheduleMode) -> [Date] {
-        guard date < end else { return [end] }
+        guard date < end else { return [] }
         return Array(stride(from: date, to: end, by: 1.0 / 30)) + [end]
     }
 }

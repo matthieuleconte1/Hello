@@ -21,6 +21,9 @@ struct LauncherView: View {
             .allowsHitTesting(model.closingTint == nil)
         }
         .environment(\.styleTokens, StyleTokens.current)
+        .transaction { transaction in
+            if !Motion.enabled { transaction.disablesAnimations = true; transaction.animation = nil }
+        }
     }
 
     private func panel(size: CGSize) -> some View {
@@ -63,9 +66,9 @@ struct LauncherView: View {
             }
         }
         // Verre : le contenu se "met au point" juste après le verre, l'œil va droit au champ de recherche.
-        .blur(radius: shown || model.lightReveal || reveal != .glass ? 0 : 8 * Motion.amplitude)
+        .blur(radius: shown || !Motion.enabled || model.lightReveal || reveal != .glass ? 0 : 8 * Motion.amplitude)
         .opacity(shown ? 1 : 0)
-        .animation(shown && settings.animations && !model.lightReveal ? .easeOut(duration: 0.18).delay(0.02) : nil,
+        .animation(shown && !model.lightReveal ? Motion.scaled(.easeOut(duration: 0.18).delay(0.02)) : nil,
                    value: shown)
         .frame(width: size.width, height: size.height, alignment: .top)
         .clipShape(shape)
@@ -106,7 +109,7 @@ struct LauncherView: View {
             if model.dropTargeted && Hermes.available && model.mode == .root {
                 shape.strokeBorder(style.accent, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
                     .overlay(alignment: .bottom) {
-                        Label("Lâche pour joindre à \(AgentEngine.assistant.name)", systemImage: "paperclip")
+                        Label("Joindre à \(AgentEngine.assistant.name)", systemImage: "paperclip")
                             .font(.system(size: 12, weight: .semibold))
                             .padding(.horizontal, 12).padding(.vertical, 6)
                             .background(Capsule().fill(.regularMaterial))
@@ -133,7 +136,7 @@ struct LauncherView: View {
                     Image(systemName: name)
                         .font(.system(size: 18, weight: style.searchBar != nil ? .semibold : .medium))
                         .foregroundStyle(style.searchBar != nil ? .primary : .secondary)
-                        .symbolEffect(.bounce.down, value: model.revealID)
+                        .symbolEffect(.bounce.down, options: .nonRepeating, value: Motion.enabled ? model.revealID : 0)
                 case .prompt(let prompt):
                     Text(prompt)
                         .font(.system(size: 20, weight: .bold, design: .monospaced))
@@ -182,7 +185,7 @@ struct LauncherView: View {
                     // Invite dessinée par SwiftUI : celle d'AppKit, pendant l'édition, se décale avec certaines polices.
                     .background(alignment: .leading) {
                         if model.query.isEmpty {
-                            Text(model.placeholder)
+                            LiveDecodeText(model.placeholder)
                                 .font(Font(style.searchFont as CTFont))
                                 .foregroundStyle(Color(nsColor: style.placeholderNSColor))
                                 .lineLimit(1)
@@ -267,11 +270,13 @@ struct LauncherView: View {
         return HStack(spacing: 16) {
             Group {
                 if let toast = model.toast {
-                    Label(toast, systemImage: "checkmark.circle.fill")
+                    LiveDecodeText(toast)
                         .foregroundStyle(style.toast)
                 } else if model.mode == .emoji, let glyph = model.selectedGlyph {
-                    Text(glyph.name).foregroundStyle(.primary)
-                        + Text("   \(glyph.code)").foregroundStyle(.secondary)
+                    HStack(spacing: 0) {
+                        LiveDecodeText(glyph.name).foregroundStyle(.primary)
+                        Text("   \(glyph.code)").foregroundStyle(.secondary).fixedSize()
+                    }
                 }
             }
             .lineLimit(1)
@@ -279,7 +284,7 @@ struct LauncherView: View {
 
             Spacer(minLength: 8)
 
-            ForEach(settings.showHints ? model.hints : []) { hint in
+            ForEach(settings.showHints && model.toast == nil ? model.hints : []) { hint in
                 HStack(spacing: 6) {
                     Text(hint.label).foregroundStyle(hint.key == "↵" ? .primary : .secondary)
                         .tracking(style.chromeCaps ? 0.7 : 0)
@@ -304,12 +309,16 @@ struct ResultList: View {
     let selection: Int
     let clickActivates: Bool
     @Namespace private var selectionSpace
+    @StateObject private var clock = DecodeClock()
 
     var body: some View {
         let style = StyleTokens.current
-        // Glyphe : les titres se décodent pendant l'ouverture complète (pas à la réouverture rapide).
-        let decode = style.decodeTitles && Motion.enabled && AppSettings.shared.cascadeRows && !model.lightReveal
-            ? model.revealDate : nil
+        // Glyphe : tout se décode dans la cascade de l'ouverture complète (pas à la réouverture rapide), puis
+        // ce qui arrive en tapant et la ligne qu'on sélectionne.
+        let arrivals = Motion.decodes
+            ? clock.arrivals(items.map(\.id), selected: items.indices.contains(selection) ? items[selection].id : nil,
+                             reveal: AppSettings.shared.cascadeRows && !model.lightReveal ? model.revealDate : nil)
+            : []
         if items.isEmpty {
             EmptyState(text: mode.emptyText, symbol: mode.symbol)
         } else {
@@ -317,9 +326,10 @@ struct ResultList: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            let arrival = arrivals.indices.contains(index) ? arrivals[index] : nil
                             VStack(alignment: .leading, spacing: 2) {
                                 if let section = item.section, index == 0 || items[index - 1].section != section {
-                                    Text(style.sectionTitle(section))
+                                    DecodeText(text: style.sectionTitle(section), start: arrival?.start, quick: arrival?.quick ?? false)
                                         .font(style.sectionFont)
                                         .tracking(style.sectionTracking)
                                         .foregroundStyle(style.header == .emphasized ? .primary : .secondary)
@@ -335,7 +345,7 @@ struct ResultList: View {
                                         .padding(.top, index == 0 ? 2 : 10)
                                 }
                                 ResultRow(item: item, selected: index == selection,
-                                          decodeStart: decode.map { $0.addingTimeInterval(RevealStyle.waveDelay(index) / Motion.speed) })
+                                          decode: arrival.map { clock.cue($0, id: item.id) })
                                     .background {
                                         if let segmented = style.segmented {
                                             SegmentCard(card: segmented.card, outer: segmented.outer, inner: segmented.inner,
@@ -378,8 +388,8 @@ struct ResultList: View {
 struct ResultRow: View {
     let item: ResultItem
     let selected: Bool
-    /// Début du décodage du titre (Glyphe) ; nil : titre affiché tel quel.
-    var decodeStart: Date? = nil
+    /// Décodage du titre et de l'icône (Glyphe) ; nil : affichés tels quels.
+    var decode: DecodeCue? = nil
 
     var body: some View {
         let style = StyleTokens.current
@@ -391,16 +401,17 @@ struct ResultRow: View {
             }
             let density = AppSettings.shared.rowDensity
             ItemIconView(icon: item.icon).frame(width: density.iconSize, height: density.iconSize)
+                .modifier(AsciiReveal(cue: decode))
                 .opacity(item.checked == false ? 0.45 : 1)
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     if selected && style.blinkingCursor { BlinkingCursor(height: 14 * style.textScale) }
-                    DecodeText(text: item.title, start: decodeStart)
+                    DecodeText(text: item.title, start: decode?.start, quick: decode?.quick ?? false)
                         .font(style.titleFont)
                         .lineLimit(1)
                 }
                 if let subtitle = item.subtitle, AppSettings.shared.showSubtitles, density != .compact {
-                    Text(subtitle)
+                    DecodeText(text: subtitle, start: decode?.start, quick: decode?.quick ?? false)
                         .font(style.font(11.5 * style.textScale))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -414,7 +425,7 @@ struct ResultRow: View {
                         Circle().fill(selected && style.selectionInk != nil ? AnyShapeStyle(.primary) : AnyShapeStyle(style.live))
                             .frame(width: 5, height: 5)
                     }
-                    Text(accessory)
+                    DecodeText(text: accessory, start: decode?.start, quick: decode?.quick ?? false)
                 }
                 .font(style.font(11, style.strongMeta ? .medium : .regular))
                 .foregroundStyle(selected || style.strongMeta ? .secondary : .tertiary)
@@ -526,7 +537,7 @@ struct SwipeToAppsHint: View {
         .opacity(Double(p))
         .offset(x: (1 - p) * 30)
         .padding(.trailing, 16)
-        .animation(.snappy(duration: 0.15), value: ready)
+        .animation(Motion.scaled(.snappy(duration: 0.15)), value: ready)
         .allowsHitTesting(false)
     }
 }
@@ -537,6 +548,7 @@ struct AppPage: View {
     let selection: Int
     let page: Int
     let selectionSpace: Namespace.ID
+    @StateObject private var clock = DecodeClock()
 
     var body: some View {
         let columns = model.appColumns
@@ -547,6 +559,11 @@ struct AppPage: View {
         // réduit la liste, page en cours de retrait) : elle s'affiche alors vide au lieu de lire hors limites.
         let end = min(start + perPage, items.count)
         let slice = start < end ? Array(items[start..<end].enumerated()) : []
+        // Glyphe : les icônes se décodent quand la page apparaît, puis celle qu'on sélectionne.
+        let arrivals = Motion.decodes
+            ? clock.arrivals(slice.map(\.element.id), selected: selection >= start && selection < end ? items[selection].id : nil,
+                             reveal: nil, columns: columns)
+            : []
 
         GeometryReader { geo in
             let cell = CGSize(width: geo.size.width / CGFloat(columns), height: geo.size.height / CGFloat(rows))
@@ -558,7 +575,8 @@ struct AppPage: View {
                     HStack(spacing: 0) {
                         ForEach(slice.filter { $0.offset / columns == row }, id: \.element.id) { offset, item in
                             let index = start + offset
-                            AppCell(item: item, size: cell, iconSize: iconSize, selected: index == selection)
+                            AppCell(item: item, size: cell, iconSize: iconSize, selected: index == selection,
+                                    decode: arrivals.indices.contains(offset) ? clock.cue(arrivals[offset], id: item.id) : nil)
                                 .background {
                                     if index == selection {
                                         SelectionFill(tint: model.closingTint, radius: StyleTokens.current.cellRadius)
@@ -592,11 +610,11 @@ struct AppPage: View {
         // Animations limitées à l'intérieur de la page (surlignage, icônes qui arrivent) : posées plus haut,
         // elles écraseraient le ressort du changement de page.
         .animation(Motion.scaled(StyleTokens.current.motion), value: selection)
-        .animation(.easeOut(duration: 0.2), value: model.iconsLoaded)
+        .animation(Motion.scaled(.easeOut(duration: 0.2)), value: model.iconsLoaded)
         .padding(.horizontal, 18)
         .padding(.top, 12)
-        .blur(radius: model.appsRevealed ? 0 : 10)
-        .animation(AppSettings.shared.animations ? .easeOut(duration: model.appsRevealed ? 0.38 : 0.14) : nil,
+        .blur(radius: model.appsRevealed || !Motion.enabled ? 0 : 10)
+        .animation(Motion.scaled(.easeOut(duration: model.appsRevealed ? 0.38 : 0.14)),
                    value: model.appsRevealed)
     }
 }
@@ -611,6 +629,7 @@ struct SpringboardReveal: ViewModifier {
     let revealed: Bool
 
     func body(content: Content) -> some View {
+        let revealed = revealed || !Motion.enabled
         let dx = CGFloat(column) - CGFloat(columns - 1) / 2
         let dy = CGFloat(row) - CGFloat(rows - 1) / 2
         let distance = Double(hypot(dx, dy))
@@ -618,10 +637,8 @@ struct SpringboardReveal: ViewModifier {
             .scaleEffect(revealed ? 1 : 1.45)
             .offset(x: revealed ? 0 : dx * 26, y: revealed ? 0 : dy * 26)
             .opacity(revealed ? 1 : 0)
-            .animation(AppSettings.shared.animations
-                       ? (revealed ? .spring(response: 0.5, dampingFraction: 0.78).delay(0.06 + distance * 0.035)
-                                   : .easeIn(duration: 0.16))
-                       : nil,
+            .animation(Motion.scaled(revealed ? .spring(response: 0.5, dampingFraction: 0.78).delay(0.06 + distance * 0.035)
+                                            : .easeIn(duration: 0.16)),
                        value: revealed)
     }
 }
@@ -631,6 +648,8 @@ struct AppCell: View {
     let size: CGSize
     let iconSize: CGFloat
     let selected: Bool
+    /// Décodage de l'icône et du nom (Glyphe).
+    var decode: DecodeCue? = nil
     /// Survol propre à chaque case : seules les deux cases concernées se redessinent quand la souris passe
     /// de l'une à l'autre (un état partagé redessinait toute la grille, y compris pendant le glissement des pages).
     @StateObject private var hover = CellHover()
@@ -659,6 +678,7 @@ struct AppCell: View {
                 }
             }
             .frame(width: iconSize, height: iconSize)
+            .modifier(AsciiReveal(cue: decode))
             // Ombre seulement sous l'icône soulevée : des dizaines d'ombres qui glissent coûtent cher à chaque image.
             .background {
                 if raised {
@@ -672,14 +692,14 @@ struct AppCell: View {
             }
             .scaleEffect(raised ? 1.08 : 1)
             .offset(y: raised ? -3 : 0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.62), value: raised)
+            .animation(Motion.scaled(.spring(response: 0.3, dampingFraction: 0.62)), value: raised)
 
             HStack(spacing: 4) {
                 if item.accessory == "Ouverte" {
                     Circle().fill(selected && style.selectionInk != nil ? AnyShapeStyle(.primary) : AnyShapeStyle(style.live))
                         .frame(width: 4, height: 4)
                 }
-                Text(item.title)
+                DecodeText(text: item.title, start: decode?.start, quick: decode?.quick ?? false)
                     .font(style.font(12, style.titleWeight, title: true))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -710,7 +730,7 @@ final class CellIcon: ObservableObject {
         self.path = path
         IconCache.requestLarge(path) { [weak self] image in
             guard let self, self.path == path else { return }
-            withAnimation(.easeOut(duration: 0.2)) { self.image = image }
+            withAnimation(Motion.scaled(.easeOut(duration: 0.2))) { self.image = image }
         }
     }
 }
@@ -904,7 +924,7 @@ struct PageDots: View {
                         .onTapGesture { select(index) }
                 }
             }
-            .animation(.snappy(duration: 0.2), value: current)
+            .animation(Motion.scaled(.snappy(duration: 0.2)), value: current)
         }
     }
 }
@@ -937,8 +957,15 @@ struct GlyphGrid: View {
     let glyphs: [Glyph]
     let selection: Int
     @Namespace private var selectionSpace
+    @StateObject private var clock = DecodeClock()
 
     var body: some View {
+        // Glyphe : les caractères se décodent en arrivant (ouverture, recherche) et quand on les sélectionne.
+        let arrivals = Motion.decodes
+            ? clock.arrivals(glyphs.map(\.id), selected: glyphs.indices.contains(selection) ? glyphs[selection].id : nil,
+                             reveal: AppSettings.shared.cascadeRows && !model.lightReveal ? model.revealDate : nil,
+                             columns: model.gridColumns)
+            : []
         if glyphs.isEmpty {
             EmptyState(text: Mode.emoji.emptyText, symbol: "face.dashed")
         } else {
@@ -949,6 +976,8 @@ struct GlyphGrid: View {
                         ForEach(Array(glyphs.enumerated()), id: \.element.id) { index, glyph in
                             Text(glyph.char)
                                 .font(.system(size: glyph.isEmoji ? 30 : 24))
+                                .modifier(AsciiReveal(cue: arrivals.indices.contains(index)
+                                    ? clock.cue(arrivals[index], id: glyph.id) : nil))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
                                 .modifier(InkOverride(color: index == selection ? StyleTokens.current.selectionInk : nil))
@@ -1518,7 +1547,8 @@ struct HaloSweep: View {
     let colors: [Color]?
 
     var body: some View {
-        if AppSettings.shared.haloSweep && AppSettings.shared.animations, let colors {
+        if AppSettings.shared.haloSweep && Motion.enabled, let colors {
+            let t = 1 / Motion.speed
             Color.clear
                 .frame(width: size.width, height: size.height)
                 .keyframeAnimator(initialValue: SweepValues(), trigger: trigger) { view, value in
@@ -1528,12 +1558,12 @@ struct HaloSweep: View {
                 } keyframes: { _ in
                     // Départ rapide puis décélération : le reflet « claque » et s'éteint vite (~0,6 s).
                     KeyframeTrack(\.angle) {
-                        SpringKeyframe(.degrees(250), duration: 0.62, spring: .init(response: 0.5, dampingRatio: 1))
+                        SpringKeyframe(.degrees(250), duration: 0.62 * t, spring: .init(response: 0.5, dampingRatio: 1))
                     }
                     KeyframeTrack(\.opacity) {
-                        LinearKeyframe(1, duration: 0.06)
-                        LinearKeyframe(1, duration: 0.2)
-                        CubicKeyframe(0, duration: 0.34)
+                        LinearKeyframe(1, duration: 0.06 * t)
+                        LinearKeyframe(1, duration: 0.2 * t)
+                        CubicKeyframe(0, duration: 0.34 * t)
                     }
                 }
                 .allowsHitTesting(false)
@@ -1594,11 +1624,15 @@ struct KeyCap: View {
 struct EmptyState: View {
     let text: String
     let symbol: String
+    @StateObject private var clock = TextClock()
 
     var body: some View {
+        // Glyphe : le symbole se décode à son apparition, comme le texte.
+        let cue = Motion.decodes ? DecodeCue(start: clock.start(for: symbol + text)) : nil
         VStack(spacing: 10) {
             Image(systemName: symbol).font(.system(size: 28, weight: .light))
-            if !text.isEmpty { Text(text).font(.system(size: 13)) }
+                .modifier(AsciiReveal(cue: cue))
+            if !text.isEmpty { LiveDecodeText(text).font(.system(size: 13)) }
         }
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
