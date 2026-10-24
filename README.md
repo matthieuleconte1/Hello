@@ -7,9 +7,6 @@
   Swift · SwiftUI · Liquid Glass · aucune dépendance · macOS 14+
 </p>
 
-> [!WARNING]
-> **Version alpha** — Hello est encore en développement. Certaines fonctions peuvent changer ou comporter des bugs.
-
 <p align="center">
   <a href="#installation">Installation</a> ·
   <a href="#ce-que-fait-hello">Fonctionnalités</a> ·
@@ -42,6 +39,8 @@ Tu appuies sur **⌘ Espace**, tu tapes deux lettres, c'est ouvert. Hello appren
 
 `↑↓` naviguer · `↵` action · `⌘↵` / `⌥↵` actions secondaires · `⇧↵` copier · `esc` retour
 
+Dans une conversation IA, deux pressions distinctes sur **Échap** en moins de 2,5 secondes arrêtent la réponse en cours ou reviennent à la recherche si elle est terminée. Une saisie en cours est d’abord effacée. **⌘W** masque Hello et laisse l’IA travailler.
+
 ## Six peaux
 
 Le même lanceur, six directions artistiques complètes. Chacune a ses couleurs, sa typographie, sa sélection, ses icônes et **ses propres animations**.
@@ -54,7 +53,7 @@ Le même lanceur, six directions artistiques complètes. Chacune a ses couleurs,
 |---|---|---|
 | **Verre** | Liquid Glass (ou verre dépoli), teintes réglables | un reflet multicolore fait le tour du bord |
 | **Atelier Expressif** | Material 3 Expressive : barre de recherche en pilule, listes segmentées, formes qui se transforment, Google Sans Flex, six thèmes de couleurs | le panneau se déploie depuis la recherche, un anneau de focus s'y dessine |
-| **Atelier Glyphe** | noir chaud et un seul accent (six au choix), panneau en retrait dans un cadre noir, sélection inversée, libellés en chasse fixe, logo en points ; une Nuit tout en rouge et au trait, automatique aux heures choisies | une onde de points part du logo, les titres se décodent lettre par lettre |
+| **Atelier Glyphe** | noir chaud et un seul accent (six au choix), panneau en retrait dans un cadre noir, sélection inversée, libellés en chasse fixe, logo en points ; une Nuit tout en rouge et au trait, automatique aux heures choisies | une onde de points part du logo, textes et icônes se décodent en ASCII (et, plus brièvement, en tapant et à chaque sélection) |
 | **Phosphore** | écran cathodique en chasse fixe, vert, ambre, blanc ou cyan | allumage du tube, balayage, résultats affichés ligne par ligne |
 | **Papier** | papier crème, ivoire ou nuit, titres à empattements | la page se déplie, un trait d'encre se trace sous la recherche |
 | **Néo-brutal** | contours noirs, ombres pleines, couleurs franches | le panneau tombe et rebondit sur son ombre |
@@ -77,7 +76,7 @@ git clone https://github.com/matthieuleconte1/Hello.git && cd Hello
 
 Il suffit des outils en ligne de commande d'Apple (`xcode-select --install`) : pas besoin d'Xcode.
 
-Pour partager l'app : `./build.sh dist` produit `build/Hello-<version>.dmg` (Apple Silicon + Intel, demande Xcode), avec un `LISEZ-MOI.txt` qui explique comment passer l'avertissement de Gatekeeper (app non notarisée). Penser à incrémenter `CFBundleShortVersionString` dans `Resources/Info.plist` avant chaque envoi.
+Pour partager l'app : `./build.sh dist` produit `build/Hello-<version>.dmg` (Apple Silicon + Intel, demande Xcode), avec un `LISEZ-MOI.txt` qui explique comment passer l'avertissement de Gatekeeper (app non notarisée). Penser à incrémenter `HelloVersion` (et `CFBundleShortVersionString`) dans `Resources/Info.plist` avant chaque envoi ; `./build.sh release` ajoute le zip que télécharge la mise à jour intégrée.
 
 Le raccourci par défaut est **⌘ Espace** : il faut alors libérer celui de Spotlight (proposé à l'accueil et dans Réglages › Permissions). On peut en choisir un autre (⌥ Espace, ⌃ Espace…).
 
@@ -94,7 +93,8 @@ Le raccourci par défaut est **⌘ Espace** : il faut alors libérer celui de Sp
 - Pas d'icône dans le Dock, pas de processus annexe ; raccourci global via Carbon (zéro coût au repos).
 - Index des apps : simple lecture de dossiers, refaite au plus une fois par minute à l'ouverture.
 - Presse-papiers : lecture d'un compteur toutes les ~0,75 s, avec tolérance pour que macOS regroupe les réveils. Les copies marquées « confidentielles » (1Password, Bitwarden…) sont ignorées.
-- Tout reste sur le Mac, dans `~/Library/Application Support/Hello/` (historique en 0600).
+- L’historique et les réglages restent sur le Mac, dans `~/Library/Application Support/Hello/` (historique en 0600). Avec l’IA, la demande et le contexte joint sont transmis au fournisseur configuré.
+- Les animations respectent le réglage « Réduire les animations » de macOS ainsi que la vitesse choisie dans Hello.
 
 ## Sous le capot
 
@@ -113,3 +113,7 @@ Environ 10 000 lignes de Swift, sans dépendance, dans un Swift Package (pas de 
 | `Uninstaller.swift`, `Agent.swift` | désinstallation propre, agent IA |
 
 L'icône et la bannière sont dessinées par du code : `swift Scripts/make-icon.swift` et `swift Scripts/make-banner.swift`.
+
+## Page web
+
+La page de présentation et son aperçu interactif sont dans [`website/`](website/README.md). Elle reprend les six styles et leurs palettes ; la démonstration reste locale au navigateur.
