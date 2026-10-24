@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr" data-style="glyph" data-appearance="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050403">
+  <title>Hello — Le Mac à portée de clavier</title>
+  <meta name="description" content="Applications, presse-papiers, terminal et IA dans un lanceur natif pour macOS. Découvrez les cinq styles de Hello.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zalando+Sans+Expanded:wght@400;600;700;800&family=Red+Hat+Display:wght@400;500;600;700;800&family=Google+Sans+Flex:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="styles.css" rel="stylesheet">
+  <script src="launcher.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="boot fallback" id="boot" aria-hidden="true">
+    <div class="boot-in">
+      <div class="boot-loader" id="boot-loader"></div>
+      <div class="boot-meta"><span id="boot-label">Hello<br>Test de fluidité</span><span class="boot-n" id="boot-n">000</span></div>
+      <div class="boot-bar"><i id="boot-bar"></i></div>
+    </div>
+  </div>
+  <a class="skip" href="#main">Aller au contenu</a>
+  <aside class="rail" aria-label="Styles de Hello">
+    <a class="brand-mark" href="#main" aria-label="Hello, accueil"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M38 21a15 15 0 1 1-12-12"/><circle cx="35" cy="12" r="3.5"/></svg></a>
+    <div class="theme-list" role="group" aria-label="Choisir un style">
+      <button data-theme="atelier" aria-pressed="false"><span>Expressif</span></button>
+      <button data-theme="glyph" aria-pressed="true"><span>Glyphe</span></button>
+      <button data-theme="phosphor" aria-pressed="false"><span>Phosphore</span></button>
+      <button data-theme="paper" aria-pressed="false"><span>Papier</span></button>
+      <button data-theme="brutal" aria-pressed="false"><span>Néo-brutal</span></button>
+    </div>
+    <button id="motion" class="motion-button" aria-pressed="true" title="Couper les animations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="12" r="5"/><path d="M2.5 8.5h6M1.5 12h5m-4 3.5h6"/></svg><span class="motion-label">Animations</span><span class="motion-switch" aria-hidden="true"><i></i></span></button>
+  </aside>
+
+  <div class="page">
+    <header class="topbar">
+      <a class="wordmark" href="#main">hello<span aria-hidden="true">.</span></a>
+      <nav aria-label="Navigation principale"><a href="https://github.com/matthieuleconte1/Hello" target="_blank" rel="noreferrer">GitHub</a></nav>
+      <span class="platform">macOS 14+</span>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="intro">
+          <h1 id="hero-title">Tout commence<br> par Hello.</h1>
+          <p>Apps, presse-papiers, terminal, IA.<br>À portée de <span class="shortcut"><kbd>⌘</kbd> <kbd>Espace</kbd>.</span></p>
+          <div class="hero-actions"><a class="button primary" href="https://github.com/matthieuleconte1/Hello/releases" target="_blank" rel="noreferrer">Télécharger Hello <span aria-hidden="true">↓</span></a></div>
+          <span class="release-note">Version 2.0 · Apple Silicon et Intel</span>
+        </div>
+
+        <div class="demo-area">
+          <div class="demo-caption"><span id="tour-status">Essaie Hello</span><button id="replay" class="quiet-button" aria-label="Revoir le défilé des thèmes">Revoir les thèmes</button></div>
+          <div class="desktop">
+            <div class="hl" id="launcher" data-mode="root">
+              <div class="hl-glow" aria-hidden="true"></div>
+              <form id="search-form" class="hl-header" role="search">
+                <span class="hl-search">
+                  <span class="hl-mark" id="hl-mark" aria-hidden="true"></span>
+                  <button type="button" id="demo-back" class="hl-back" aria-label="Revenir à la recherche" hidden></button>
+                  <label class="sr-only" for="search">Rechercher dans la démonstration</label>
+                  <input id="search" type="search" placeholder="Rechercher une app ou une commande…" autocomplete="off" spellcheck="false" aria-controls="demo-content">
+                  <span class="hl-request" id="hl-request" hidden></span>
+                  <span class="hl-run" id="hl-run" hidden></span>
+                  <span class="hl-buttons" id="hl-buttons">
+                    <button type="button" class="hl-hbtn" data-demo="Joindre des fichiers pour l’IA (démo)" title="Joindre des fichiers pour l’IA (⌘O)" aria-label="Joindre des fichiers"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.6 7.2 7.1 11.7a2.6 2.6 0 0 1-3.7-3.7l5-5a1.7 1.7 0 0 1 2.5 2.5L6.1 10.3a.9.9 0 0 1-1.2-1.2l4.3-4.3"/></svg></button>
+                    <button type="button" class="hl-hbtn" data-demo="Capture d’écran pour l’IA (démo)" title="Capture d’écran pour l’IA (⇧⌘S)" aria-label="Capture d’écran"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5V3.4C2 2.6 2.6 2 3.4 2H5M11 2h1.6c.8 0 1.4.6 1.4 1.4V5M14 11v1.6c0 .8-.6 1.4-1.4 1.4H11M5 14H3.4C2.6 14 2 13.4 2 12.6V11"/><circle cx="8" cy="8" r="2.4"/></svg></button>
+                    <button type="button" id="show-apps" class="hl-hbtn" title="Toutes les applications" aria-label="Toutes les applications"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1.5" y="1.5" width="3.6" height="3.6" rx="1"/><rect x="6.2" y="1.5" width="3.6" height="3.6" rx="1"/><rect x="10.9" y="1.5" width="3.6" height="3.6" rx="1"/><rect x="1.5" y="6.2" width="3.6" height="3.6" rx="1"/><rect x="6.2" y="6.2" width="3.6" height="3.6" rx="1"/><rect x="10.9" y="6.2" width="3.6" height="3.6" rx="1"/><rect x="1.5" y="10.9" width="3.6" height="3.6" rx="1"/><rect x="6.2" y="10.9" width="3.6" height="3.6" rx="1"/><rect x="10.9" y="10.9" width="3.6" height="3.6" rx="1"/></svg></button>
+                  </span>
+                </span>
+              </form>
+              <div class="hl-divider"></div>
+              <div class="hl-pane"><div class="hl-content" id="demo-content" aria-label="Résultats de la démonstration"></div></div>
+              <div class="hl-divider"></div>
+              <div class="hl-footer"><span id="demo-status" role="status"></span><span class="hl-hints" id="demo-hint"></span></div>
+              <div class="hl-fx" aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="try-commands" role="group" aria-label="Essayer une fonction"><button data-query="applications">Applications</button><button data-query="presse">Presse-papiers</button><button data-query="> git status">Terminal</button><button data-query="?">IA</button></div>
+        </div>
+      </section>
+
+      <section class="style-controls" aria-label="Personnaliser le style">
+        <div class="style-description"><h2 id="style-name">Atelier Glyphe</h2><p id="style-detail">Noir chaud, accent unique et sélection inversée.</p></div>
+        <div class="variant-control"><label for="variant" id="variant-label">Accent</label><select id="variant"></select></div>
+        <div class="appearance-control"><label for="appearance">Apparence</label><select id="appearance"><option value="dark">Sombre</option><option value="light">Clair</option><option value="night">Nuit</option></select></div>
+        <div class="swatch-preview" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      </section>
+
+    </main>
+    <footer class="page-footer"><span>Hello pour macOS</span><a href="https://github.com/matthieuleconte1/Hello" target="_blank" rel="noreferrer">Code source</a><a href="https://claude.ai/artifact/64ZneEev6oVuxvKmTStapX" target="_blank" rel="noreferrer">Charte Atelier Glyphe</a></footer>
+  </div>
+  <div id="notification" class="notification" role="status" hidden></div>
+</body>
+</html>
