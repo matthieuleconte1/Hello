@@ -29,6 +29,23 @@ struct MarkRing: Shape {
     }
 }
 
+/// Le contour de l'anneau tracé jusqu'à `progress` (bouts ronds compris), pour le dessiner évidé.
+struct RingOutline: Shape {
+    var progress: CGFloat
+    let width: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        guard progress > 0.001 else { return Path() }
+        return MarkRing().path(in: rect).trimmedPath(from: 0, to: progress)
+            .strokedPath(StrokeStyle(lineWidth: width, lineCap: .round))
+    }
+}
+
 /// Le logo, dans la matière d'un style (les « six peaux »).
 struct HelloMark: View {
     enum Skin {
@@ -38,7 +55,8 @@ struct HelloMark: View {
         case ink(Color)
         /// Atelier : anneau d'encre, point en cookie Material.
         case atelier(ring: Color, dot: Color)
-        /// Atelier Glyphe : l'anneau devient une ligne de points (le chargeur de l'artifact), le point prend l'accent.
+        /// Atelier Glyphe : l'anneau évidé, au filet fin (comme les titres en contour de la Nuit) ; le point reste plein
+        /// et prend l'accent (« rempli = choisi »).
         case glyph(ring: Color, dot: Color)
         /// Phosphore : anneau vert, le point devient le curseur bloc.
         case phosphor(Color)
@@ -83,11 +101,9 @@ struct HelloMark: View {
         case .phosphor(let color):
             trimmed.stroke(color, style: style).shadow(color: color.opacity(0.6), radius: line * 0.5)
         case .glyph(let color, _):
-            // Neuf points d'un bout à l'autre de l'arc : un tiret de longueur nulle à bouts ronds est un point.
-            let arc = MarkGeometry.ringRadius * 2 * .pi * MarkGeometry.spanDegrees / 360
-            let side = line / MarkGeometry.stroke
-            trimmed.stroke(color, style: StrokeStyle(lineWidth: line * 0.9, lineCap: .round,
-                                                     dash: [0, side * arc / 8.001]))
+            // Le contour de l'anneau plein : filet d'environ 1 pt dans la barre de recherche.
+            RingOutline(progress: progress, width: line)
+                .stroke(color, style: StrokeStyle(lineWidth: max(1, line * 0.22), lineJoin: .round))
         case .brutal(let color):
             ZStack {
                 trimmed.stroke(Color.black, style: StrokeStyle(lineWidth: line * 1.3, lineCap: .round))
