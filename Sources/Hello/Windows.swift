@@ -793,21 +793,7 @@ private struct AppearanceSettings: View {
             switch settings.panelStyle {
             case .glass: glassSections
             case .atelier: atelierSections
-            case .glyph:
-                Section {
-                    SwatchRow(items: GlyphAccent.allCases.map { ($0.id, $0.title, [$0.swatch]) },
-                              selected: settings.glyphAccent.id) { id in
-                        settings.glyphAccent = GlyphAccent(rawValue: id) ?? .orange
-                    }
-                    .disabled(settings.glyphAppearance == .night)
-                    Picker("Apparence", selection: $settings.glyphAppearance) {
-                        ForEach(GlyphAppearance.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                } header: { Text("Atelier Glyphe") } footer: {
-                    Text("Une seule couleur, qui marque la touche ↵, le logo et l'icône choisie. La Nuit passe tout en rouge "
-                         + "sur noir pour préserver la vision nocturne : la forme prend le relais de la couleur.")
-                }
+            case .glyph: glyphSections
             case .phosphor:
                 Section {
                     SwatchRow(items: PhosphorColor.allCases.map { ($0.id, $0.title, [$0.colors.ink, $0.colors.screen]) },
@@ -941,6 +927,60 @@ private struct AppearanceSettings: View {
                 }
             }
         }
+    }
+
+    /// Réglages propres au style Atelier Glyphe.
+    @ViewBuilder private var glyphSections: some View {
+        let night = settings.glyphEffectiveAppearance == .night
+        Section {
+            SwatchRow(items: GlyphAccent.allCases.map { ($0.id, $0.title, [$0.swatch]) },
+                      selected: settings.glyphAccent.id) { id in
+                settings.glyphAccent = GlyphAccent(rawValue: id) ?? .orange
+            }
+            .disabled(night)
+            Picker("Apparence", selection: $settings.glyphAppearance) {
+                ForEach(GlyphAppearance.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        } header: { Text("Atelier Glyphe") } footer: {
+            Text("Une seule couleur, qui marque la touche ↵, le logo et l'icône choisie.")
+        }
+
+        Section {
+            Toggle("Passer en Nuit automatiquement", isOn: $settings.glyphAutoNight)
+            if settings.glyphAutoNight {
+                LabeledContent("Entre") {
+                    HStack(spacing: 8) {
+                        hourPicker($settings.glyphNightStart)
+                        Text("et")
+                        hourPicker($settings.glyphNightEnd)
+                    }
+                }
+            }
+            LabeledContent("Luminosité") {
+                HStack {
+                    Slider(value: $settings.glyphNightLevel, in: 0.4...1) { EmptyView() }
+                        minimumValueLabel: { Image(systemName: "moon") }
+                        maximumValueLabel: { Image(systemName: "moon.fill") }
+                    Text("\(Int((settings.glyphNightLevel * 100).rounded())) %").monospacedDigit().foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+            .disabled(!night && !settings.glyphAutoNight && settings.glyphAppearance != .night)
+        } header: { Text("Nuit") } footer: {
+            Text((night ? "La Nuit est active. " : "")
+                 + "Tout passe en un seul rouge sur noir pour préserver la vision nocturne : la forme prend le relais "
+                 + "de la couleur (rempli = choisi, au trait = disponible), les icônes d'apps virent au rouge et rien "
+                 + "ne s'éclaire d'une autre couleur. L'heure est vérifiée à chaque ouverture de Hello.")
+        }
+    }
+
+    private func hourPicker(_ hour: Binding<Int>) -> some View {
+        Picker("", selection: hour) {
+            ForEach(0..<24, id: \.self) { Text("\($0) h").tag($0) }
+        }
+        .labelsHidden()
+        .fixedSize()
     }
 
     /// Réglages propres au style Verre.

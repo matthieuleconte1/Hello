@@ -148,10 +148,16 @@ struct AnimatedMark: View {
     struct Values {
         var progress: CGFloat = 1
         var dot: CGFloat = 1
+        var spin: Double = 0
     }
 
     let skin: HelloMark.Skin
     let trigger: Int
+
+    private var isGlyph: Bool {
+        if case .glyph = skin { return true }
+        return false
+    }
 
     var body: some View {
         if Motion.enabled {
@@ -159,6 +165,7 @@ struct AnimatedMark: View {
             Color.clear
                 .keyframeAnimator(initialValue: Values(), trigger: trigger) { _, value in
                     HelloMark(skin: skin, progress: value.progress, dotScale: value.dot)
+                        .rotationEffect(.degrees(value.spin))
                 } keyframes: { _ in
                     KeyframeTrack(\.dot) {
                         LinearKeyframe(0, duration: 0.001)
@@ -168,6 +175,11 @@ struct AnimatedMark: View {
                         LinearKeyframe(0, duration: 0.001)
                         LinearKeyframe(0, duration: 0.1 * t)
                         SpringKeyframe(1, duration: 0.55 * t, spring: .init(response: 0.45, dampingRatio: 0.92))
+                    }
+                    // Glyphe : comme le chargeur de l'artifact, la ligne de points file en comète avant de se poser.
+                    KeyframeTrack(\.spin) {
+                        LinearKeyframe(isGlyph ? -150 : 0, duration: 0.001)
+                        SpringKeyframe(0, duration: 0.8 * t, spring: .init(response: 0.6, dampingRatio: 0.82))
                     }
                 }
         } else {

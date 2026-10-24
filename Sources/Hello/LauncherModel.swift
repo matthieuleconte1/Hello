@@ -271,10 +271,16 @@ final class LauncherModel: ObservableObject {
         closingTint = color
     }
 
+    /// Début de la dernière ouverture complète (les titres de Glyphe se décodent à partir de là).
+    private(set) var revealDate: Date?
+
     func setPresented(_ value: Bool, light: Bool = false) {
         if value && !presented {
             lightReveal = light
-            if !light { revealID += 1 }
+            if !light {
+                revealID += 1
+                revealDate = Date()
+            }
         }
         // Fermé, le panneau revient toujours à l'état de départ complet (goutte, verre clair) : sinon, après une
         // réouverture rapide, l'ouverture complète suivante partirait de l'état final et ne jouerait rien.

@@ -183,6 +183,8 @@ final class Controller: NSObject, NSWindowDelegate {
     func hide(tint: NSColor? = nil) {
         guard panel.isVisible, closing == nil else { return }
         resumeUntil = .distantPast
+        // La Nuit de Glyphe ne s'éclaire jamais d'une autre couleur que son rouge.
+        let tint = tint.map { StyleTokens.current.launchTint.map(NSColor.init) ?? $0 }
         guard let tint else {
             panel.orderOut(nil)
             model.setPresented(false)

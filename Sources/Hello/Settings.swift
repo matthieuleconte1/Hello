@@ -262,6 +262,27 @@ final class AppSettings: ObservableObject {
     @Published var glyphAppearance = GlyphAppearance(rawValue: value("glyphAppearance", "auto")) ?? .auto {
         didSet { Self.d.set(glyphAppearance.rawValue, forKey: "glyphAppearance") }
     }
+    /// Passe en Nuit tout seul entre deux heures (22 h → 7 h par défaut), quelle que soit l'apparence choisie.
+    @Published var glyphAutoNight = value("glyphAutoNight", false) {
+        didSet { Self.d.set(glyphAutoNight, forKey: "glyphAutoNight") }
+    }
+    @Published var glyphNightStart = value("glyphNightStart", 22) { didSet { Self.d.set(glyphNightStart, forKey: "glyphNightStart") } }
+    @Published var glyphNightEnd = value("glyphNightEnd", 7) { didSet { Self.d.set(glyphNightEnd, forKey: "glyphNightEnd") } }
+    /// Luminosité du rouge de la Nuit (le curseur de l'artifact) : 0,4 à 1.
+    @Published var glyphNightLevel = value("glyphNightLevel", 0.85) {
+        didSet { Self.d.set(glyphNightLevel, forKey: "glyphNightLevel") }
+    }
+
+    /// Apparence de Glyphe à cet instant : la Nuit automatique l'emporte pendant sa plage horaire.
+    var glyphEffectiveAppearance: GlyphAppearance {
+        guard glyphAutoNight, glyphNightStart != glyphNightEnd else { return glyphAppearance }
+        let hour = Calendar.current.component(.hour, from: Date())
+        // Plage qui passe minuit (22 h → 7 h) ou non (1 h → 5 h).
+        let night = glyphNightStart > glyphNightEnd
+            ? hour >= glyphNightStart || hour < glyphNightEnd
+            : hour >= glyphNightStart && hour < glyphNightEnd
+        return night ? .night : glyphAppearance
+    }
     @Published var phosphorColor = PhosphorColor(rawValue: value("phosphorColor", "green")) ?? .green {
         didSet { Self.d.set(phosphorColor.rawValue, forKey: "phosphorColor") }
     }
@@ -275,7 +296,7 @@ final class AppSettings: ObservableObject {
     /// Tout ce qui change l'aspect du champ de recherche (police, couleurs) : il ne se reconfigure que si ça change.
     var styleSignature: String {
         [panelStyle.rawValue, atelierPalette.rawValue, "\(atelierSwap)", atelierAppearance.rawValue,
-         glyphAccent.rawValue, glyphAppearance.rawValue, phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
+         glyphAccent.rawValue, glyphEffectiveAppearance.rawValue, "\(glyphNightLevel)", phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
             .joined(separator: "|")
     }
 
@@ -417,6 +438,10 @@ final class AppSettings: ObservableObject {
         atelierColoredSelection = false
         glyphAccent = .orange
         glyphAppearance = .auto
+        glyphAutoNight = false
+        glyphNightStart = 22
+        glyphNightEnd = 7
+        glyphNightLevel = 0.85
         phosphorColor = .green
         paperTone = .cream
         brutalColor = .pink

@@ -97,13 +97,16 @@ enum RevealStyle {
         case .glass: .spring(response: 0.28, dampingFraction: 0.8).delay(0.04 + n * 0.018)
         case .unfold: .spring(response: 0.5, dampingFraction: 0.72).delay(0.08 + n * 0.035)
         // Décalage de 34 ms d'un élément au suivant, comme les planches de l'artifact.
-        case .wave: .spring(response: 0.44, dampingFraction: 0.8).delay(0.06 + n * 0.034)
+        case .wave: .spring(response: 0.44, dampingFraction: 0.8).delay(Self.waveDelay(order))
         // Une ligne après l'autre, sans fondu : comme un terminal qui affiche sa sortie.
         case .crt: .linear(duration: 0.001).delay(0.2 + Double(min(order, 14)) * 0.045)
         case .page: .easeOut(duration: 0.34).delay(0.1 + n * 0.03)
         case .slam: .spring(response: 0.32, dampingFraction: 0.5).delay(0.14 + n * 0.03)
         }
     }
+
+    /// Glyphe : départ d'une ligne dans la cascade (le titre se décode au même moment).
+    static func waveDelay(_ order: Int) -> Double { 0.06 + Double(min(order, 12)) * 0.034 }
 
     /// Effacement quand on lance une app (en même temps que le fondu de la fenêtre, ≈0,2 s).
     var close: Animation {
@@ -422,8 +425,8 @@ struct FocusRing: View {
 }
 
 /// Glyphe : une onde de points part du logo et traverse le panneau (la « révélation » de l'artifact, où le
-/// contenu se décode à sa place). Front net, traîne longue qui s'éteint ; seuls les points proches du front
-/// sont dessinés, dans un seul Canvas.
+/// contenu se décode à sa place). Front net et dense, traîne longue qui s'émiette comme un signal qu'on décode :
+/// la taille des points monte par paliers (une trame, pas un dégradé) et un bruit en éteint au hasard dans la traîne.
 struct DotWave: View {
     let trigger: Int
     let size: CGSize
@@ -433,8 +436,9 @@ struct DotWave: View {
 
     var body: some View {
         let t = 1 / Motion.speed
-        // Pas de la grille, front (net) et traîne (longue) de l'onde, en points.
-        let step: CGFloat = 14, lead: CGFloat = 16, trail: CGFloat = 90
+        // Pas de la grille, front (net) et traîne (longue) de l'onde, en points ; rayons des quatre paliers.
+        let step: CGFloat = 13, lead: CGFloat = 14, trail: CGFloat = 110
+        let levels: [CGFloat] = [0.55, 0.95, 1.4, 1.95]
         let corners = [CGPoint.zero, CGPoint(x: size.width, y: 0), CGPoint(x: 0, y: size.height),
                        CGPoint(x: size.width, y: size.height)]
         let reach = corners.map { hypot($0.x - origin.x, $0.y - origin.y) }.max() ?? 0
@@ -445,34 +449,108 @@ struct DotWave: View {
                     if progress > 0.001 && progress < 0.999 {
                         Canvas { context, _ in
                             let front = progress * (reach + trail)
-                            let fade = 1 - progress * 0.6
-                            // Les rangées que l’onde n’a pas encore atteintes sont sautées.
-                            let minY = max(0, origin.y - front - lead), maxY = min(size.height, origin.y + front + lead)
-                            var y = (minY / step).rounded(.down) * step + step / 2
+                            let fade = 1 - progress * 0.55
+                            // Le bruit change par à-coups (≈ 20 fois par seconde), comme des glyphes qui défilent.
+                            let tick = Int(progress * 18)
+                            // Les rangées que l'onde n'a pas encore atteintes sont sautées.
+                            let maxY = min(size.height, origin.y + front + lead)
+                            var row = 0
+                            var y = step / 2
                             while y < maxY {
+                                var column = 0
                                 var x = step / 2
                                 while x < size.width {
                                     let d = hypot(x - origin.x, y - origin.y)
                                     let lit = d > front ? 1 - (d - front) / lead : 1 - (front - d) / trail
                                     if lit > 0 {
-                                        let r = 0.5 + 1.3 * lit
-                                        context.opacity = lit * fade
-                                        context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
-                                                     with: .color(color))
+                                        let noise = DecodeText.noise(column, row, tick)
+                                        // Dans la traîne, les points s'éteignent au hasard à mesure que le signal faiblit.
+                                        if d > front - 20 || noise < lit * 1.3 {
+                                            let r = levels[min(levels.count - 1, Int(lit * CGFloat(levels.count)))]
+                                            context.opacity = (0.35 + 0.65 * lit) * fade
+                                            context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
+                                                         with: .color(color))
+                                        }
                                     }
                                     x += step
+                                    column += 1
                                 }
                                 y += step
+                                row += 1
                             }
                         }
                         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                     }
                 }
             } keyframes: { _ in
-                LinearKeyframe(0, duration: 0.1 * t)
-                CubicKeyframe(1, duration: 0.9 * t)
+                LinearKeyframe(0, duration: 0.08 * t)
+                CubicKeyframe(1, duration: 0.95 * t)
             }
             .allowsHitTesting(false)
+    }
+}
+
+/// Glyphe : le titre se décode à sa place, de gauche à droite. Chaque lettre monte en densité (. : = # @),
+/// passe par quelques glyphes puis se fige — le « Décodage » de l'artifact. `start` nil ou passé : texte tel quel.
+struct DecodeText: View {
+    let text: String
+    let start: Date?
+
+    private static let ramp = Array(".:-=+*#%@")
+    private static let glyphs = Array("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#%&*+=?/")
+
+    var body: some View {
+        if let start, case let end = start.addingTimeInterval(Self.duration(text) / Motion.speed), Date() < end {
+            TimelineView(DecodeSchedule(end: end)) { context in
+                Text(Self.frame(text, progress: context.date.timeIntervalSince(start) / end.timeIntervalSince(start)))
+            }
+        } else {
+            Text(text)
+        }
+    }
+
+    /// Les titres longs prennent un peu plus de temps, sans dépasser 0,6 s.
+    static func duration(_ text: String) -> TimeInterval { min(0.3 + Double(text.count) * 0.012, 0.6) }
+
+    /// Le texte à `progress` (0 à 1) : chaque lettre a sa fenêtre, décalée de gauche à droite.
+    static func frame(_ text: String, progress: Double) -> String {
+        let chars = Array(text)
+        let count = Double(max(chars.count, 1))
+        let window = 0.4
+        let tick = Int(max(progress, 0) * 26)
+        var out = ""
+        for (i, char) in chars.enumerated() {
+            let settle = window + (1 - window) * Double(i) / count
+            let phase = (progress - settle + window) / window
+            if char == " " || progress >= settle {
+                out.append(char)
+            } else if phase < 0 {
+                out.append(" ")
+            } else if phase < 0.45 {
+                out.append(ramp[min(ramp.count - 1, Int(phase / 0.45 * Double(ramp.count)))])
+            } else {
+                out.append(glyphs[Int(noise(i, 0, tick) * Double(glyphs.count)) % glyphs.count])
+            }
+        }
+        return out
+    }
+
+    /// Bruit déterministe dans [0, 1) : le même point (ou la même lettre) garde sa valeur pendant un « tick ».
+    nonisolated static func noise(_ a: Int, _ b: Int, _ tick: Int) -> Double {
+        var h = UInt64(truncatingIfNeeded: a &* 73_856_093 ^ b &* 19_349_663 ^ tick &* 83_492_791)
+        h = (h ^ (h >> 13)) &* 0x5bd1_e995
+        h ^= h >> 15
+        return Double(h % 10_000) / 10_000
+    }
+}
+
+/// Images du décodage : 30 par seconde jusqu'à la fin, puis plus rien (la vue ne redessine plus).
+struct DecodeSchedule: TimelineSchedule {
+    let end: Date
+
+    func entries(from date: Date, mode: TimelineScheduleMode) -> [Date] {
+        guard date < end else { return [end] }
+        return Array(stride(from: date, to: end, by: 1.0 / 30)) + [end]
     }
 }
 

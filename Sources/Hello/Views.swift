@@ -44,7 +44,9 @@ struct LauncherView: View {
                     }
                     .modifier(RootSwipeOffset(pager: model.pager, active: model.mode == .root))
                     // La page sortante ne doit pas imposer la grande taille de la grille au retour.
-                    .frame(width: size.width, height: max(0, size.height - 102), alignment: .top)
+                    // Panneau en retrait : 8 pt de cadre de chaque côté (`styledPane` les ajoute autour).
+                    .frame(width: size.width - (style.insetPane ? 16 : 0), height: max(0, size.height - 102),
+                           alignment: .top)
                     .overlay(alignment: .trailing) {
                         if model.mode == .root { SwipeToAppsHint(pager: model.pager) }
                     }
@@ -85,7 +87,7 @@ struct LauncherView: View {
                         StampShadow(trigger: model.revealID, color: style.selectionFill, radius: PanelLayout.radius,
                                     rest: offset)
                     }
-                    shape.fill(Color.black)
+                    shape.fill(style.hardShadowColor)
                         .offset(x: landed - shift, y: landed - shift)
                         .animation(Motion.scaled(reveal.close), value: closing)
                 }
@@ -280,12 +282,14 @@ struct LauncherView: View {
             ForEach(settings.showHints ? model.hints : []) { hint in
                 HStack(spacing: 6) {
                     Text(hint.label).foregroundStyle(hint.key == "↵" ? .primary : .secondary)
+                        .tracking(style.chromeCaps ? 0.7 : 0)
                     KeyCap(hint.key, primary: hint.key == "↵")
                 }
                 .fixedSize()
             }
         }
-        .font(style.font(12))
+        .textCase(style.chromeCaps ? .uppercase : nil)
+        .font(style.chromeCaps ? .system(size: 11, weight: .medium).width(.condensed) : style.font(12))
         .padding(.horizontal, 16)
         .frame(height: 40)
     }
@@ -303,6 +307,9 @@ struct ResultList: View {
 
     var body: some View {
         let style = StyleTokens.current
+        // Glyphe : les titres se décodent pendant l'ouverture complète (pas à la réouverture rapide).
+        let decode = style.decodeTitles && Motion.enabled && AppSettings.shared.cascadeRows && !model.lightReveal
+            ? model.revealDate : nil
         if items.isEmpty {
             EmptyState(text: mode.emptyText, symbol: mode.symbol)
         } else {
@@ -316,10 +323,19 @@ struct ResultList: View {
                                         .font(style.sectionFont)
                                         .tracking(style.sectionTracking)
                                         .foregroundStyle(style.header == .emphasized ? .primary : .secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.bottom, style.sectionRule != nil ? 4 : 0)
+                                        .overlay(alignment: .bottom) {
+                                            if let rule = style.sectionRule {
+                                                HRule().stroke(rule, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                                                    .frame(height: 1)
+                                            }
+                                        }
                                         .padding(.horizontal, 12)
                                         .padding(.top, index == 0 ? 2 : 10)
                                 }
-                                ResultRow(item: item, selected: index == selection)
+                                ResultRow(item: item, selected: index == selection,
+                                          decodeStart: decode.map { $0.addingTimeInterval(RevealStyle.waveDelay(index) / Motion.speed) })
                                     .background {
                                         if let segmented = style.segmented {
                                             SegmentCard(card: segmented.card, outer: segmented.outer, inner: segmented.inner,
@@ -362,6 +378,8 @@ struct ResultList: View {
 struct ResultRow: View {
     let item: ResultItem
     let selected: Bool
+    /// Début du décodage du titre (Glyphe) ; nil : titre affiché tel quel.
+    var decodeStart: Date? = nil
 
     var body: some View {
         let style = StyleTokens.current
@@ -377,7 +395,7 @@ struct ResultRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     if selected && style.blinkingCursor { BlinkingCursor(height: 14 * style.textScale) }
-                    Text(item.title)
+                    DecodeText(text: item.title, start: decodeStart)
                         .font(style.titleFont)
                         .lineLimit(1)
                 }

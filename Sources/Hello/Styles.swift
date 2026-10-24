@@ -146,7 +146,8 @@ struct StyleTokens {
     enum TileStyle {
         case tinted, cookie, outline, bordered
         /// Carré aux coins doux qui s'arrondissent et prennent l'accent une fois choisi (Glyphe).
-        case glyph(rest: Color, ink: Color, selected: Color, selectedInk: Color)
+        /// `stroke` : pastille au trait (la Nuit, où « trait plein = disponible, rempli = choisi »).
+        case glyph(rest: Color, ink: Color, selected: Color, selectedInk: Color, stroke: Color?)
     }
     enum SearchMark { case logo, symbol(String), prompt(String) }
 
@@ -176,6 +177,7 @@ struct StyleTokens {
     var border: (color: Color, width: CGFloat)?
     /// Ombre pleine décalée (Néo-brutal) à la place de l'ombre floue.
     var hardShadow: CGFloat?
+    var hardShadowColor = Color.black
     var divider: Color
 
     var design: Font.Design = .default
@@ -211,6 +213,14 @@ struct StyleTokens {
     var keyHardShadow = false
     /// Touches en chasse fixe, comme les libellés (`kbd` de Glyphe).
     var monoKeys = false
+    /// Libellés du pied de page en capitales étroites (la Nuit de Glyphe).
+    var chromeCaps = false
+    /// Filet pointillé sous les titres de section.
+    var sectionRule: Color?
+    /// Couleur imposée à l'effet de lancement (au lieu de celle de l'app) : la Nuit ne s'éclaire qu'en rouge.
+    var launchTint: Color?
+    /// Titres des résultats qui se décodent en arrivant (Glyphe).
+    var decodeTitles = false
 
     var tile: TileStyle = .tinted
     /// Icônes d'apps monochromes (Phosphore).
@@ -224,6 +234,12 @@ struct StyleTokens {
     var blinkingCursor = false
 
     static var current: StyleTokens { AppSettings.shared.panelStyle.tokens }
+
+    /// Contenu posé sur un panneau intérieur, dans un cadre (Atelier).
+    var insetPane: Bool {
+        if case .inset = surface { return true }
+        return false
+    }
 
     /// En-tête : sur le cadre (chrome), ou dans la barre de recherche (couleurs du contenu).
     var headerInk: Color { searchBar != nil ? ink : chromeInk }
@@ -316,7 +332,7 @@ struct StyleTokens {
         switch style {
         case .glass: glass
         case .atelier: atelier(dark: atelierIsDark)
-        case .glyph: glyph(AppSettings.shared.glyphAccent, appearance: AppSettings.shared.glyphAppearance)
+        case .glyph: glyph(AppSettings.shared.glyphAccent, appearance: AppSettings.shared.glyphEffectiveAppearance)
         case .phosphor: phosphor(AppSettings.shared.phosphorColor)
         case .paper: paper(AppSettings.shared.paperTone)
         case .brutal: brutal(AppSettings.shared.brutalColor)
@@ -402,48 +418,67 @@ struct StyleTokens {
         static let paneLight = Color(hex: "#EFEEEC")
         static let ctrlLight = Color(hex: "#E7E5E2")
         static let invLight = Color(hex: "#080604")
-        // Nuit : rouge à 85 % (le réglage de luminosité de l'artifact), filets rouges plus ou moins denses.
-        static let red = Color(hex: "#D94433")
+        // Nuit : rouge (255, 80, 60) à la luminosité réglée, filets rouges plus ou moins denses.
+        static func red(_ level: Double) -> Color { Color(red: level, green: 80 / 255 * level, blue: 60 / 255 * level) }
         static func redLine(_ opacity: Double) -> Color { Color(red: 1, green: 60 / 255, blue: 40 / 255).opacity(opacity) }
         /// Ressort « défaut » de l'artifact : ça arrive, ça se pose, avec un léger dépassement.
         static let spring = Animation.spring(response: 0.36, dampingFraction: 0.78)
     }
 
     private static func glyph(_ choice: GlyphAccent, appearance: GlyphAppearance) -> StyleTokens {
+        if appearance == .night { return glyphNight(level: AppSettings.shared.glyphNightLevel) }
         let g = Glyph.self
-        let night = appearance == .night
-        let dark = switch appearance {
-        case .auto: systemIsDark
-        case .light: false
-        case .dark, .night: true
-        }
-        let ink = night ? g.red : dark ? g.onFrame : g.onInv
-        // Sélection inversée, comme l'élément coché d'un menu : clair sur sombre, noir sur clair, rouge la nuit.
-        let selection = night ? g.red : dark ? g.inv : g.invLight
-        let selectionInk = night ? Color.black : dark ? g.onInv : .white
-        let (accent, onAccent) = night ? (g.red, .black) : choice.colors ?? (ink, dark ? g.onInv : .white)
-        // Mono (et la Nuit) : l'accent se confond avec la sélection, la pastille choisie s'inverse plutôt.
-        let blends = night || choice == .mono
+        let dark = appearance == .dark || (appearance == .auto && systemIsDark)
+        let ink = dark ? g.onFrame : g.onInv
+        // Sélection inversée, comme l'élément coché d'un menu : claire sur sombre, noire sur clair.
+        let selection = dark ? g.inv : g.invLight
+        let selectionInk = dark ? g.onInv : Color.white
+        let (accent, onAccent) = choice.colors ?? (ink, dark ? g.onInv : .white)
+        // Mono : l'accent se confond avec la sélection, la pastille choisie s'inverse plutôt.
+        let mono = choice == .mono
         // Logo et touche ↵ sont posés sur le cadre noir : Mono y passe en blanc.
-        let frameAccent = !night && choice == .mono ? g.onFrame : accent
-        let frameOnAccent = !night && choice == .mono ? g.frame : onAccent
-        let chrome = night ? g.red : g.onFrame
+        let frameAccent = mono ? g.onFrame : accent
         return StyleTokens(
-            surface: .inset(frame: night ? .black : g.frame, pane: night ? .black : dark ? g.pane : g.paneLight),
-            dark: dark, ink: ink, chromeInk: chrome, chromeDark: true,
-            accent: accent, accent2: accent, live: accent, toast: chrome,
+            surface: .inset(frame: g.frame, pane: dark ? g.pane : g.paneLight),
+            dark: dark, ink: ink, chromeInk: g.onFrame, chromeDark: true,
+            accent: accent, accent2: accent, live: accent, toast: g.onFrame,
             selectionFill: selection, selectionInk: selectionInk,
             rowRadius: 12, cellRadius: 14, radius: 22, divider: .clear,
             searchWidth: .expanded, titleWeight: .semibold, searchWeight: .medium, header: .label,
-            markSkin: .glyph(ring: chrome, dot: frameAccent),
+            markSkin: .glyph(ring: g.onFrame, dot: frameAccent),
             fontFamily: "Red Hat Display", displayFamily: "Zalando Sans Expanded",
-            paneBorder: night ? g.redLine(0.58) : dark ? g.frameLine : nil,
-            keyFill: night ? .clear : g.frameHi, keyInk: night ? g.red : g.onFrame.opacity(0.62),
-            keyBorder: night ? g.redLine(0.58) : Color.white.opacity(0.14),
-            primaryKeyFill: frameAccent, primaryKeyInk: frameOnAccent, monoKeys: true,
-            tile: .glyph(rest: night ? g.redLine(0.1) : dark ? g.ctrl : g.ctrlLight, ink: ink,
-                         selected: blends ? selectionInk : accent, selectedInk: blends ? selection : onAccent),
+            paneBorder: dark ? g.frameLine : nil,
+            keyFill: g.frameHi, keyInk: g.onFrame.opacity(0.62), keyBorder: Color.white.opacity(0.14),
+            primaryKeyFill: frameAccent, primaryKeyInk: mono ? g.frame : onAccent, monoKeys: true,
+            decodeTitles: true,
+            tile: .glyph(rest: dark ? g.ctrl : g.ctrlLight, ink: ink,
+                         selected: mono ? selectionInk : accent, selectedInk: mono ? selection : onAccent, stroke: nil),
             motion: g.spring)
+    }
+
+    /// La Nuit de l'artifact : une seule teinte, alors la forme prend le relais de la couleur.
+    /// Rempli = choisi · trait plein = disponible · pointillé = secondaire · décalage du trait = hauteur.
+    /// Pas de lueur ni d'ombre floue : la seule lumière est ce rouge, à la luminosité réglée.
+    private static func glyphNight(level: Double) -> StyleTokens {
+        let g = Glyph.self
+        let red = g.red(level)
+        let line = g.redLine(0.58)
+        return StyleTokens(
+            surface: .inset(frame: .black, pane: .black),
+            dark: true, ink: red, chromeInk: red, chromeDark: true,
+            accent: red, accent2: red, live: red, toast: red,
+            selectionFill: red, selectionInk: .black,
+            rowRadius: 12, cellRadius: 14, radius: 22, border: (line, 1), hardShadow: 6,
+            hardShadowColor: g.redLine(0.36), divider: .clear,
+            searchWidth: .expanded, titleWeight: .medium, searchWeight: .regular, header: .label,
+            markSkin: .glyph(ring: red, dot: red),
+            fontFamily: "Red Hat Display", displayFamily: "Zalando Sans Expanded", paneBorder: line,
+            strongMeta: true,
+            keyFill: .clear, keyInk: red, keyBorder: line,
+            primaryKeyFill: red, primaryKeyInk: .black, monoKeys: true,
+            chromeCaps: true, sectionRule: g.redLine(0.32), launchTint: red, decodeTitles: true,
+            tile: .glyph(rest: .clear, ink: red, selected: .black, selectedInk: red, stroke: line),
+            iconTint: red, motion: g.spring)
     }
 
     private static func phosphor(_ color: PhosphorColor) -> StyleTokens {
@@ -573,6 +608,16 @@ extension View {
     }
 }
 
+/// Trait horizontal au milieu du cadre (filets pointillés).
+struct HRule: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        }
+    }
+}
+
 /// Lignes de balayage d'un écran cathodique : un motif d'1 × 3 px répété (aucun calcul par image).
 struct Scanlines: View {
     private static let pattern: NSImage = {
@@ -659,6 +704,17 @@ struct CookieShape: Shape {
 struct SymbolTile: View {
     let name: String
     let tint: Color
+
+    /// Version au trait d'un symbole plein (« gearshape.fill » → « gearshape »), s'il en existe une.
+    private static var outlines: [String: String] = [:]
+    static func outline(_ name: String) -> String {
+        if let cached = outlines[name] { return cached }
+        let stripped = name.replacingOccurrences(of: ".fill", with: "")
+        let result = stripped != name && NSImage(systemSymbolName: stripped, accessibilityDescription: nil) != nil
+            ? stripped : name
+        outlines[name] = result
+        return result
+    }
     @Environment(\.styleTokens) private var style
     @Environment(\.rowSelected) private var selected
 
@@ -695,12 +751,19 @@ struct SymbolTile: View {
                 .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.black, lineWidth: 1.5))
                 .overlay(glyph.foregroundStyle(.black))
                 .padding(1)
-        case .glyph(let rest, let ink, let on, let onInk):
+        case .glyph(let rest, let ink, let on, let onInk, let stroke):
             // « Des coins qui réagissent » : choisie, la pastille s'arrondit et prend l'accent, sur un ressort.
-            RoundedRectangle(cornerRadius: selected ? 9 : 6, style: .continuous)
+            // Au trait (la Nuit), le symbole est fin au repos et plein une fois choisi.
+            let shape = RoundedRectangle(cornerRadius: selected ? 9 : 5, style: .continuous)
+            shape
                 .fill(selected ? on : rest)
-                .overlay(glyph.foregroundStyle(selected ? onInk : ink).symbolVariant(selected ? .fill : .none))
+                .overlay { if let stroke, !selected { shape.strokeBorder(stroke, lineWidth: 1) } }
+                .overlay(Image(systemName: stroke != nil && !selected ? Self.outline(name) : name)
+                    .font(.system(size: 13, weight: stroke != nil && !selected ? .light : .semibold))
+                    .foregroundStyle(selected ? onInk : ink)
+                    .symbolVariant(selected ? .fill : .none))
                 .padding(1)
+                .scaleEffect(selected ? 1.06 : 1)
                 .animation(StyleTokens.Glyph.spring, value: selected)
         }
     }
@@ -816,7 +879,7 @@ struct StyleSample: View {
         .styledSurface(t, cornerRadius: radius)
         .background {
             if let offset = t.hardShadow {
-                shape.fill(Color.black).offset(x: offset * s, y: offset * s)
+                shape.fill(t.hardShadowColor).offset(x: offset * s, y: offset * s)
             } else {
                 shape.fill(Color.black.opacity(0.3)).blur(radius: 12 * s).offset(y: 8 * s)
             }
@@ -877,7 +940,7 @@ struct StyleCard: View {
             LinearGradient(colors: [Color(hex: "#1B1F4B"), Color(hex: "#3B1E5C"), Color(hex: "#0E3B4F")],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         case .atelier: AtelierPalette.current.secondary
-        case .glyph: AppSettings.shared.glyphAppearance == .night ? Color(hex: "#3A0B06")
+        case .glyph: AppSettings.shared.glyphEffectiveAppearance == .night ? Color(hex: "#3A0B06")
             : AppSettings.shared.glyphAccent.swatch
         case .phosphor: Color(hex: "#0B130D")
         case .paper: Color(hex: "#D9CFBF")
