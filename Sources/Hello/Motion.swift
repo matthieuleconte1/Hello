@@ -7,6 +7,8 @@ enum RevealStyle {
     case glass
     /// Atelier (Material 3 Expressive) : le panneau se déploie depuis la barre de recherche, lignes en vagues.
     case unfold
+    /// Atelier Glyphe : le panneau se pose sur un ressort, une onde de points part du logo et traverse le panneau.
+    case wave
     /// Phosphore : allumage cathodique (une ligne qui s'ouvre), scintillement, lignes « tapées » une à une.
     case crt
     /// Papier : la feuille se déplie vers l'avant, lignes qui glissent comme de l'encre.
@@ -21,6 +23,8 @@ enum RevealStyle {
             + "fenêtre et ondule en se posant. Le flou se met au point et un reflet lumineux fait le tour du bord."
         case .unfold: "ressorts Material 3 Expressive. Le panneau se déploie depuis la barre de recherche, les résultats "
             + "arrivent en vagues et les pastilles changent de forme quand on les sélectionne."
+        case .wave: "trois ressorts, pas de courbe fixe : ça arrive, ça se pose. Les résultats montent en cascade serrée "
+            + "et les coins des pastilles s'arrondissent quand on les choisit."
         case .crt: "allumage cathodique avec scintillement, résultats affichés ligne par ligne et curseur qui clignote. "
             + "Au lancement d'une app, l'écran s'éteint en trait."
         case .page: "la feuille se déplie vers l'avant, les résultats glissent comme de l'encre et le marque-page suit la sélection."
@@ -34,6 +38,7 @@ enum RevealStyle {
         switch self {
         case .glass: "un reflet multicolore fait le tour du bord."
         case .unfold: "un anneau de focus se dessine autour de la barre de recherche, dans un halo du second accent."
+        case .wave: "une onde de points part du logo, traverse le panneau dans la couleur d'accent et s'éteint."
         case .crt: "le faisceau balaie l'écran une fois, de haut en bas."
         case .page: "un trait d'encre se trace sous la recherche, puis sèche et s'efface."
         case .slam: "une ombre de la couleur de sélection claque sous le panneau, puis rentre sous l'ombre noire."
@@ -45,6 +50,7 @@ enum RevealStyle {
         switch self {
         case .glass: light ? .snappy(duration: 0.14) : .spring(response: 0.46, dampingFraction: 0.7)
         case .unfold: light ? .spring(response: 0.22, dampingFraction: 0.86) : .spring(response: 0.44, dampingFraction: 0.72)
+        case .wave: light ? .spring(response: 0.22, dampingFraction: 0.9) : .spring(response: 0.46, dampingFraction: 0.8)
         case .crt: light ? .easeOut(duration: 0.1) : .timingCurve(0.2, 0.9, 0.3, 1, duration: 0.34)
         case .page: light ? .easeOut(duration: 0.14) : .spring(response: 0.48, dampingFraction: 0.84)
         case .slam: light ? .spring(response: 0.2, dampingFraction: 0.75) : .spring(response: 0.36, dampingFraction: 0.5)
@@ -56,6 +62,7 @@ enum RevealStyle {
         switch self {
         case .glass: .snappy(duration: 0.24)
         case .unfold: .spring(response: 0.38, dampingFraction: 0.86)
+        case .wave: .spring(response: 0.36, dampingFraction: 0.82)
         case .crt: .linear(duration: 0.06)
         case .page: .easeInOut(duration: 0.26)
         case .slam: .spring(response: 0.3, dampingFraction: 0.62)
@@ -72,6 +79,8 @@ enum RevealStyle {
             // « Axe partagé » de Material : l'ancien écran part d'un côté pendant que le nouveau arrive de l'autre.
             return .asymmetric(insertion: .offset(x: 30 * k * side).combined(with: .opacity).combined(with: .scale(scale: 0.98)),
                                removal: .offset(x: -30 * k * side).combined(with: .opacity))
+        case .wave:
+            return .asymmetric(insertion: .offset(x: 22 * k * side).combined(with: .opacity), removal: .opacity)
         case .crt:
             return .opacity
         case .page:
@@ -87,6 +96,8 @@ enum RevealStyle {
         return switch self {
         case .glass: .spring(response: 0.28, dampingFraction: 0.8).delay(0.04 + n * 0.018)
         case .unfold: .spring(response: 0.5, dampingFraction: 0.72).delay(0.08 + n * 0.035)
+        // Décalage de 34 ms d'un élément au suivant, comme les planches de l'artifact.
+        case .wave: .spring(response: 0.44, dampingFraction: 0.8).delay(0.06 + n * 0.034)
         // Une ligne après l'autre, sans fondu : comme un terminal qui affiche sa sortie.
         case .crt: .linear(duration: 0.001).delay(0.2 + Double(min(order, 14)) * 0.045)
         case .page: .easeOut(duration: 0.34).delay(0.1 + n * 0.03)
@@ -99,6 +110,7 @@ enum RevealStyle {
         switch self {
         case .glass: .easeOut(duration: 0.22)
         case .unfold: .spring(response: 0.24, dampingFraction: 0.6)
+        case .wave: .spring(response: 0.2, dampingFraction: 0.9)
         case .crt: .easeIn(duration: 0.16)
         case .page: .easeIn(duration: 0.2)
         case .slam: .spring(response: 0.16, dampingFraction: 0.7)
@@ -149,6 +161,14 @@ struct PanelMotion: ViewModifier {
                 .scaleEffect(x: hidden ? 1 - 0.05 * k : 1, y: hidden ? max(0.3, 1 - 0.4 * k) : 1, anchor: .top)
                 .offset(y: hidden ? -10 * k : 0)
                 .opacity(hidden ? 0 : 1)
+        case .wave:
+            // Le panneau part d'un peu plus petit et se pose ; au lancement, il recule d'un cran.
+            content
+                .scaleEffect(closing ? 1 - 0.025 * k : 1)
+                .animation(close, value: closing)
+                .scaleEffect(hidden ? 1 - 0.03 * k : 1, anchor: .top)
+                .offset(y: hidden ? 6 * k : 0)
+                .opacity(hidden ? 0 : 1)
         case .crt:
             // Allumage : un trait lumineux qui s'ouvre en écran. Extinction : l'écran s'écrase en trait.
             content
@@ -196,12 +216,14 @@ struct RevealItem: ViewModifier {
         let offset: CGSize = switch reveal {
         case .glass: CGSize(width: 0, height: 10 * k)
         case .unfold: CGSize(width: 0, height: 18 * k)
+        case .wave: CGSize(width: 0, height: 14 * k)
         case .crt: .zero
         case .page: CGSize(width: -10 * k, height: 0)
         case .slam: CGSize(width: 0, height: 14 * k)
         }
         let scale: CGFloat = switch reveal {
         case .unfold: 1 - 0.06 * k
+        case .wave: 1 - 0.015 * k
         case .slam: 1 - 0.15 * k
         default: 1
         }
@@ -253,7 +275,8 @@ struct BlinkingCursor: View {
 // MARK: - Effets d'ouverture
 
 /// Effet joué à chaque ouverture, propre au style (Réglages › Animations › « Effet d'ouverture »).
-/// `pill` : la barre de recherche (Atelier) ; `underline` : la ligne sous le texte recherché (Papier).
+/// `pill` : la barre de recherche (Atelier) ; `underline` : la ligne sous le texte recherché (Papier) ;
+/// `mark` : le centre du logo (Glyphe).
 struct OpeningEffect: View {
     let style: PanelStyle
     let tokens: StyleTokens
@@ -262,6 +285,7 @@ struct OpeningEffect: View {
     let radius: CGFloat
     let pill: CGRect
     let underline: CGRect
+    let mark: CGPoint
 
     /// Le reflet multicolore du Verre.
     static let glassColors = [Color(red: 0.36, green: 0.30, blue: 0.98), Color(red: 0.93, green: 0.36, blue: 0.75),
@@ -274,6 +298,8 @@ struct OpeningEffect: View {
                 HaloSweep(trigger: trigger, size: size, radius: radius, colors: Self.glassColors)
             case .atelier:
                 FocusRing(trigger: trigger, size: size, pill: pill, colors: (tokens.accent, tokens.accent2))
+            case .glyph:
+                DotWave(trigger: trigger, size: size, radius: radius, origin: mark, color: tokens.primaryKeyFill ?? tokens.accent)
             case .phosphor:
                 ScanBeam(trigger: trigger, size: size, radius: radius, color: tokens.ink)
             case .paper:
@@ -390,6 +416,61 @@ struct FocusRing: View {
                     LinearKeyframe(0, duration: 0.3 * t)
                     CubicKeyframe(1, duration: 0.6 * t)
                 }
+            }
+            .allowsHitTesting(false)
+    }
+}
+
+/// Glyphe : une onde de points part du logo et traverse le panneau (la « révélation » de l'artifact, où le
+/// contenu se décode à sa place). Front net, traîne longue qui s'éteint ; seuls les points proches du front
+/// sont dessinés, dans un seul Canvas.
+struct DotWave: View {
+    let trigger: Int
+    let size: CGSize
+    let radius: CGFloat
+    let origin: CGPoint
+    let color: Color
+
+    var body: some View {
+        let t = 1 / Motion.speed
+        // Pas de la grille, front (net) et traîne (longue) de l'onde, en points.
+        let step: CGFloat = 14, lead: CGFloat = 16, trail: CGFloat = 90
+        let corners = [CGPoint.zero, CGPoint(x: size.width, y: 0), CGPoint(x: 0, y: size.height),
+                       CGPoint(x: size.width, y: size.height)]
+        let reach = corners.map { hypot($0.x - origin.x, $0.y - origin.y) }.max() ?? 0
+        Color.clear
+            .frame(width: size.width, height: size.height)
+            .keyframeAnimator(initialValue: 0.0, trigger: trigger) { view, progress in
+                view.overlay {
+                    if progress > 0.001 && progress < 0.999 {
+                        Canvas { context, _ in
+                            let front = progress * (reach + trail)
+                            let fade = 1 - progress * 0.6
+                            // Les rangées que l’onde n’a pas encore atteintes sont sautées.
+                            let minY = max(0, origin.y - front - lead), maxY = min(size.height, origin.y + front + lead)
+                            var y = (minY / step).rounded(.down) * step + step / 2
+                            while y < maxY {
+                                var x = step / 2
+                                while x < size.width {
+                                    let d = hypot(x - origin.x, y - origin.y)
+                                    let lit = d > front ? 1 - (d - front) / lead : 1 - (front - d) / trail
+                                    if lit > 0 {
+                                        let r = 0.5 + 1.3 * lit
+                                        context.opacity = lit * fade
+                                        context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
+                                                     with: .color(color))
+                                    }
+                                    x += step
+                                }
+                                y += step
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                    }
+                }
+            } keyframes: { _ in
+                LinearKeyframe(0, duration: 0.1 * t)
+                CubicKeyframe(1, duration: 0.9 * t)
             }
             .allowsHitTesting(false)
     }

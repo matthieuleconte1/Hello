@@ -13,7 +13,7 @@
 <p align="center">
   <a href="#installation">Installation</a> ·
   <a href="#ce-que-fait-hello">Fonctionnalités</a> ·
-  <a href="#cinq-peaux">Cinq peaux</a> ·
+  <a href="#six-peaux">Six peaux</a> ·
   <a href="#sous-le-capot">Sous le capot</a>
 </p>
 
@@ -42,9 +42,9 @@ Tu appuies sur **⌘ Espace**, tu tapes deux lettres, c'est ouvert. Hello appren
 
 `↑↓` naviguer · `↵` action · `⌘↵` / `⌥↵` actions secondaires · `⇧↵` copier · `esc` retour
 
-## Cinq peaux
+## Six peaux
 
-Le même lanceur, cinq directions artistiques complètes. Chacune a ses couleurs, sa typographie, sa sélection, ses icônes et **ses propres animations**.
+Le même lanceur, six directions artistiques complètes. Chacune a ses couleurs, sa typographie, sa sélection, ses icônes et **ses propres animations**.
 
 <p align="center">
   <img src="docs/styles.png" alt="Atelier, Phosphore, Papier, Néo-brutal et Verre" width="100%">
@@ -54,6 +54,7 @@ Le même lanceur, cinq directions artistiques complètes. Chacune a ses couleurs
 |---|---|---|
 | **Verre** | Liquid Glass (ou verre dépoli), teintes réglables | un reflet multicolore fait le tour du bord |
 | **Atelier Expressif** | Material 3 Expressive : barre de recherche en pilule, listes segmentées, formes qui se transforment, Google Sans Flex, six thèmes de couleurs | le panneau se déploie depuis la recherche, un anneau de focus s'y dessine |
+| **Atelier Glyphe** | noir chaud et un seul accent (six au choix), panneau en retrait dans un cadre noir, sélection inversée, libellés en chasse fixe, logo en points ; une Nuit tout en rouge | une onde de points part du logo et traverse le panneau |
 | **Phosphore** | écran cathodique en chasse fixe, vert, ambre, blanc ou cyan | allumage du tube, balayage, résultats affichés ligne par ligne |
 | **Papier** | papier crème, ivoire ou nuit, titres à empattements | la page se déplie, un trait d'encre se trace sous la recherche |
 | **Néo-brutal** | contours noirs, ombres pleines, couleurs franches | le panneau tombe et rebondit sur son ombre |
@@ -104,7 +105,7 @@ Environ 10 000 lignes de Swift, sans dépendance, dans un Swift Package (pas de 
 | `Controller.swift` | la fenêtre flottante, le raccourci, l'ouverture et la fermeture |
 | `LauncherModel.swift` | les modes, la recherche, le clavier, les actions |
 | `Views.swift` | le panneau en SwiftUI : liste, grille d'apps, aperçus, terminal |
-| `Styles.swift`, `Motion.swift`, `Mark.swift` | les cinq peaux, leurs animations, le logo |
+| `Styles.swift`, `Motion.swift`, `Mark.swift` | les six peaux, leurs animations, le logo |
 | `Windows.swift` | réglages façon Réglages Système et accueil |
 | `AppIndex.swift`, `Usage.swift` | index des apps, frécence et apprentissage |
 | `Shell.swift`, `Terminal.swift` | commandes shell, pseudo-terminal, dossiers, ports, processus |

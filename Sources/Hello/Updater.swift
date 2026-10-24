@@ -64,8 +64,10 @@ final class Updater: ObservableObject {
         var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(Self.repo)/releases?per_page=15")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 20
+        // Lu ici, sur le fil principal : la réponse arrive sur un fil de URLSession.
+        let prereleases = AppSettings.shared.updatePrereleases
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            let result = Self.newest(data: data, prereleases: AppSettings.shared.updatePrereleases)
+            let result = Self.newest(data: data, prereleases: prereleases)
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let error {
@@ -104,8 +106,9 @@ final class Updater: ObservableObject {
     /// Comparaison façon semver : 2.0.0 > 2.0.0-alpha.2 > 2.0.0-alpha.1 > 1.9.
     static func compare(_ a: String, _ b: String) -> Int {
         func split(_ v: String) -> ([Int], [String]) {
-            let parts = v.split(separator: "-", maxSplits: 1).map(String.init)
-            let numbers = parts[0].split(separator: ".").map { Int($0) ?? 0 }
+            // Étiquette vide ou réduite à un suffixe (« v », « -beta ») : pas de numéro, pas de plantage.
+            let parts = v.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+            let numbers = (parts.first ?? "").split(separator: ".").map { Int($0) ?? 0 }
             let pre = parts.count > 1 ? parts[1].split(separator: ".").map(String.init) : []
             return (numbers, pre)
         }
@@ -134,6 +137,7 @@ final class Updater: ObservableObject {
         state = .downloading(0)
         let task = URLSession.shared.downloadTask(with: release.asset) { [weak self] file, _, error in
             guard let self else { return }
+            DispatchQueue.main.async { self.progressWatch = nil }
             guard let file else {
                 return DispatchQueue.main.async { self.state = .failed(error?.localizedDescription ?? "Téléchargement impossible.") }
             }
@@ -204,6 +208,12 @@ final class Updater: ObservableObject {
     /// Un petit script attend la fin de Hello, remplace l'app (en gardant l'ancienne si la copie échoue) et la relance.
     private func swap(to app: URL) {
         let destination = Bundle.main.bundleURL.path
+        // Dossier protégé (app installée par un autre compte) : le script échouerait après avoir quitté Hello,
+        // qui se relancerait sans rien dire dans l'ancienne version.
+        guard FileManager.default.isWritableFile(atPath: (destination as NSString).deletingLastPathComponent) else {
+            state = .failed("Impossible de remplacer Hello dans ce dossier : installe la mise à jour à la main.")
+            return
+        }
         let script = """
         while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done
         rm -rf "$DEST.old"

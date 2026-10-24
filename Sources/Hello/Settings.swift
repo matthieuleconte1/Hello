@@ -88,6 +88,20 @@ enum ThemeAppearance: String, CaseIterable, Identifiable {
     }
 }
 
+/// Apparence d'Atelier Glyphe : comme les autres, plus la Nuit de l'artifact (tout en un seul rouge sur noir).
+enum GlyphAppearance: String, CaseIterable, Identifiable {
+    case auto, light, dark, night
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .auto: "Auto"
+        case .light: "Clair"
+        case .dark: "Sombre"
+        case .night: "Nuit"
+        }
+    }
+}
+
 /// Formes Material 3 Expressive des pastilles d'Atelier : cercle au repos, la forme choisie une fois sélectionnée.
 enum AtelierShape: String, CaseIterable, Identifiable {
     case cookie, clover, flower, sunny, circle
@@ -242,6 +256,12 @@ final class AppSettings: ObservableObject {
     @Published var atelierColoredSelection = value("atelierColoredSelection", false) {
         didSet { Self.d.set(atelierColoredSelection, forKey: "atelierColoredSelection") }
     }
+    @Published var glyphAccent = GlyphAccent(rawValue: value("glyphAccent", "orange")) ?? .orange {
+        didSet { Self.d.set(glyphAccent.rawValue, forKey: "glyphAccent") }
+    }
+    @Published var glyphAppearance = GlyphAppearance(rawValue: value("glyphAppearance", "auto")) ?? .auto {
+        didSet { Self.d.set(glyphAppearance.rawValue, forKey: "glyphAppearance") }
+    }
     @Published var phosphorColor = PhosphorColor(rawValue: value("phosphorColor", "green")) ?? .green {
         didSet { Self.d.set(phosphorColor.rawValue, forKey: "phosphorColor") }
     }
@@ -255,7 +275,7 @@ final class AppSettings: ObservableObject {
     /// Tout ce qui change l'aspect du champ de recherche (police, couleurs) : il ne se reconfigure que si ça change.
     var styleSignature: String {
         [panelStyle.rawValue, atelierPalette.rawValue, "\(atelierSwap)", atelierAppearance.rawValue,
-         phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
+         glyphAccent.rawValue, glyphAppearance.rawValue, phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
             .joined(separator: "|")
     }
 
@@ -395,6 +415,8 @@ final class AppSettings: ObservableObject {
         atelierShape = .cookie
         atelierAppearance = .auto
         atelierColoredSelection = false
+        glyphAccent = .orange
+        glyphAppearance = .auto
         phosphorColor = .green
         paperTone = .cream
         brutalColor = .pink

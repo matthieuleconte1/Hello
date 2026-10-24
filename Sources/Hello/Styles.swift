@@ -4,13 +4,14 @@ import SwiftUI
 /// Direction artistique du panneau. « Verre » suit les réglages de verre (matériau, teinte, surlignage) ;
 /// les autres sont des styles complets : fond, typographie, sélection, touches, icônes et mouvement.
 enum PanelStyle: String, CaseIterable, Identifiable {
-    case glass, atelier, phosphor, paper, brutal
+    case glass, atelier, glyph, phosphor, paper, brutal
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .glass: "Verre"
         case .atelier: "Atelier Expressif"
+        case .glyph: "Atelier Glyphe"
         case .phosphor: "Phosphore"
         case .paper: "Papier"
         case .brutal: "Néo-brutal"
@@ -22,6 +23,8 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .glass: "Liquid Glass ou verre dépoli, réglable ci-dessous."
         case .atelier: "Material 3 Expressive : barre de recherche en pilule, listes segmentées, formes qui se transforment, "
             + "Google Sans Flex et ressorts. Cadre noir, cartes blanches et deux couleurs signal au choix."
+        case .glyph: "Un noir chaud et une seule couleur : panneau en retrait dans un cadre noir, sélection inversée, "
+            + "libellés en chasse fixe, logo en points et ressorts. La Nuit passe tout dans un seul rouge."
         case .phosphor: "Écran cathodique : vert phosphore, tout en chasse fixe, sélection en vidéo inverse."
         case .paper: "Papier crème, titres à empattements, filets fins et marque-page vermillon."
         case .brutal: "Crème, gros contours noirs, ombres pleines et couleurs franches qui rebondissent."
@@ -32,6 +35,7 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         switch self {
         case .glass: "drop.fill"
         case .atelier: "square.grid.2x2.fill"
+        case .glyph: "circle.grid.3x3.fill"
         case .phosphor: "terminal.fill"
         case .paper: "book.closed.fill"
         case .brutal: "square.stack.3d.down.forward.fill"
@@ -45,6 +49,7 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         switch self {
         case .glass: .glass
         case .atelier: .unfold
+        case .glyph: .wave
         case .phosphor: .crt
         case .paper: .page
         case .brutal: .slam
@@ -95,6 +100,39 @@ enum AtelierPalette: String, CaseIterable, Identifiable {
     }
 }
 
+/// Accent unique d'Atelier Glyphe (les six de l'artifact). Il ne décore jamais : il marque l'action principale
+/// (touche ↵), le logo et l'élément choisi. « Mono » reprend la couleur du texte.
+enum GlyphAccent: String, CaseIterable, Identifiable {
+    case orange, amber, green, coral, violet, mono
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .orange: "Orange"
+        case .amber: "Ambre"
+        case .green: "Vert"
+        case .coral: "Corail"
+        case .violet: "Violet"
+        case .mono: "Mono"
+        }
+    }
+
+    /// Accent et texte posé dessus ; nil pour Mono (il dépend de l'apparence).
+    var colors: (accent: Color, on: Color)? {
+        switch self {
+        case .orange: (Color(hex: "#ED6A0C"), .white)
+        case .amber: (Color(hex: "#EFB85C"), Color(hex: "#111111"))
+        case .green: (Color(hex: "#78DD8B"), Color(hex: "#111111"))
+        case .coral: (Color(hex: "#FF6C67"), Color(hex: "#111111"))
+        case .violet: (Color(hex: "#A25BFF"), .white)
+        case .mono: nil
+        }
+    }
+
+    /// Couleur de la pastille dans les réglages.
+    var swatch: Color { colors?.accent ?? Color(hex: "#F1F1F1") }
+}
+
 /// Tout ce qu'un style décide. Les vues du panneau lisent `StyleTokens.current` une fois par rendu.
 struct StyleTokens {
     enum Surface {
@@ -104,8 +142,12 @@ struct StyleTokens {
         case inset(frame: Color, pane: Color)
     }
 
-    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized }
-    enum TileStyle { case tinted, cookie, outline, bordered }
+    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized, label }
+    enum TileStyle {
+        case tinted, cookie, outline, bordered
+        /// Carré aux coins doux qui s'arrondissent et prennent l'accent une fois choisi (Glyphe).
+        case glyph(rest: Color, ink: Color, selected: Color, selectedInk: Color)
+    }
     enum SearchMark { case logo, symbol(String), prompt(String) }
 
     var surface: Surface
@@ -147,6 +189,10 @@ struct StyleTokens {
     var markSkin: HelloMark.Skin = .glass
     /// Police variable (axes wght / wdth / opsz) ; nil ou absente du Mac : police système.
     var fontFamily: String?
+    /// Police d'affiche du champ de recherche (titres larges) ; nil ou absente : `fontFamily`, puis le système.
+    var displayFamily: String?
+    /// Filet d'un pixel autour du panneau intérieur (`.inset`).
+    var paneBorder: Color?
 
     /// Barre de recherche en pilule posée dans l'en-tête (Material) : elle prend les couleurs du contenu.
     var searchBar: Color?
@@ -163,6 +209,8 @@ struct StyleTokens {
     var primaryKeyFill: Color?
     var primaryKeyInk: Color?
     var keyHardShadow = false
+    /// Touches en chasse fixe, comme les libellés (`kbd` de Glyphe).
+    var monoKeys = false
 
     var tile: TileStyle = .tinted
     /// Icônes d'apps monochromes (Phosphore).
@@ -206,9 +254,13 @@ struct StyleTokens {
 
     var titleFont: Font { font(13.5 * textScale, titleWeight, title: true) }
 
-    var searchFont: NSFont {
-        let size = (21 * textScale).rounded()
-        if let fontFamily, let font = VariableFont.make(fontFamily, size: size, weight: 500) { return font }
+    var searchFont: NSFont { displayNSFont((21 * textScale).rounded()) }
+
+    /// Police du champ de recherche, à n'importe quelle taille (les aperçus des réglages la reprennent en petit).
+    func displayNSFont(_ size: CGFloat) -> NSFont {
+        for family in [displayFamily, fontFamily].compactMap({ $0 }) {
+            if let font = VariableFont.make(family, size: size, weight: 500) { return font }
+        }
         var font = NSFont.systemFont(ofSize: size, weight: searchWeight, width: searchWidth.map(Self.nsWidth) ?? .standard)
         let nsDesign: NSFontDescriptor.SystemDesign? = switch titleDesign ?? design {
         case .serif: .serif
@@ -234,7 +286,7 @@ struct StyleTokens {
     func sectionTitle(_ text: String) -> String {
         switch header {
         case .plain, .serifItalic, .emphasized: text
-        case .kicker: text.uppercased()
+        case .kicker, .label: text.uppercased()
         case .comment: "// " + text.lowercased()
         }
     }
@@ -246,10 +298,17 @@ struct StyleTokens {
         case .comment: .system(size: 11, weight: .regular, design: .monospaced)
         case .serifItalic: .system(size: 12.5, weight: .regular, design: .serif).italic()
         case .emphasized: font(12.5, .bold, width: 112)
+        case .label: .system(size: 10.5, weight: .medium, design: .monospaced)
         }
     }
 
-    var sectionTracking: CGFloat { header == .kicker ? 1.2 : 0 }
+    var sectionTracking: CGFloat {
+        switch header {
+        case .kicker: 1.2
+        case .label: 0.7
+        default: 0
+        }
+    }
 
     // MARK: - Fabrique
 
@@ -257,6 +316,7 @@ struct StyleTokens {
         switch style {
         case .glass: glass
         case .atelier: atelier(dark: atelierIsDark)
+        case .glyph: glyph(AppSettings.shared.glyphAccent, appearance: AppSettings.shared.glyphAppearance)
         case .phosphor: phosphor(AppSettings.shared.phosphorColor)
         case .paper: paper(AppSettings.shared.paperTone)
         case .brutal: brutal(AppSettings.shared.brutalColor)
@@ -324,6 +384,66 @@ struct StyleTokens {
             primaryKeyFill: primary, primaryKeyInk: a.ink,
             tile: .cookie,
             motion: a.spring, coloredSelection: colored)
+    }
+
+    /// Valeurs de l'artifact « Atelier Glyphe » : cadre noir chaud (identique dans tous les thèmes), panneau en
+    /// retrait clair ou sombre, gris superposés, et la Nuit où tout passe dans un seul rouge.
+    enum Glyph {
+        static let frame = Color(hex: "#050403")
+        static let onFrame = Color.white
+        static let frameHi = Color.white.opacity(0.07)
+        static let frameLine = Color.white.opacity(0.1)
+        // Sombre
+        static let pane = Color(hex: "#080604")
+        static let ctrl = Color(hex: "#242424")
+        static let inv = Color(hex: "#F1F1F1")
+        static let onInv = Color(hex: "#111111")
+        // Clair
+        static let paneLight = Color(hex: "#EFEEEC")
+        static let ctrlLight = Color(hex: "#E7E5E2")
+        static let invLight = Color(hex: "#080604")
+        // Nuit : rouge à 85 % (le réglage de luminosité de l'artifact), filets rouges plus ou moins denses.
+        static let red = Color(hex: "#D94433")
+        static func redLine(_ opacity: Double) -> Color { Color(red: 1, green: 60 / 255, blue: 40 / 255).opacity(opacity) }
+        /// Ressort « défaut » de l'artifact : ça arrive, ça se pose, avec un léger dépassement.
+        static let spring = Animation.spring(response: 0.36, dampingFraction: 0.78)
+    }
+
+    private static func glyph(_ choice: GlyphAccent, appearance: GlyphAppearance) -> StyleTokens {
+        let g = Glyph.self
+        let night = appearance == .night
+        let dark = switch appearance {
+        case .auto: systemIsDark
+        case .light: false
+        case .dark, .night: true
+        }
+        let ink = night ? g.red : dark ? g.onFrame : g.onInv
+        // Sélection inversée, comme l'élément coché d'un menu : clair sur sombre, noir sur clair, rouge la nuit.
+        let selection = night ? g.red : dark ? g.inv : g.invLight
+        let selectionInk = night ? Color.black : dark ? g.onInv : .white
+        let (accent, onAccent) = night ? (g.red, .black) : choice.colors ?? (ink, dark ? g.onInv : .white)
+        // Mono (et la Nuit) : l'accent se confond avec la sélection, la pastille choisie s'inverse plutôt.
+        let blends = night || choice == .mono
+        // Logo et touche ↵ sont posés sur le cadre noir : Mono y passe en blanc.
+        let frameAccent = !night && choice == .mono ? g.onFrame : accent
+        let frameOnAccent = !night && choice == .mono ? g.frame : onAccent
+        let chrome = night ? g.red : g.onFrame
+        return StyleTokens(
+            surface: .inset(frame: night ? .black : g.frame, pane: night ? .black : dark ? g.pane : g.paneLight),
+            dark: dark, ink: ink, chromeInk: chrome, chromeDark: true,
+            accent: accent, accent2: accent, live: accent, toast: chrome,
+            selectionFill: selection, selectionInk: selectionInk,
+            rowRadius: 12, cellRadius: 14, radius: 22, divider: .clear,
+            searchWidth: .expanded, titleWeight: .semibold, searchWeight: .medium, header: .label,
+            markSkin: .glyph(ring: chrome, dot: frameAccent),
+            fontFamily: "Red Hat Display", displayFamily: "Zalando Sans Expanded",
+            paneBorder: night ? g.redLine(0.58) : dark ? g.frameLine : nil,
+            keyFill: night ? .clear : g.frameHi, keyInk: night ? g.red : g.onFrame.opacity(0.62),
+            keyBorder: night ? g.redLine(0.58) : Color.white.opacity(0.14),
+            primaryKeyFill: frameAccent, primaryKeyInk: frameOnAccent, monoKeys: true,
+            tile: .glyph(rest: night ? g.redLine(0.1) : dark ? g.ctrl : g.ctrlLight, ink: ink,
+                         selected: blends ? selectionInk : accent, selectedInk: blends ? selection : onAccent),
+            motion: g.spring)
     }
 
     private static func phosphor(_ color: PhosphorColor) -> StyleTokens {
@@ -440,7 +560,13 @@ extension View {
     func styledPane(_ style: StyleTokens, panelRadius: CGFloat) -> some View {
         if case .inset(_, let pane) = style.surface {
             let shape = RoundedRectangle(cornerRadius: max(panelRadius - 8, 8), style: .continuous)
-            background(shape.fill(pane)).clipShape(shape).padding(.horizontal, 8)
+            background(shape.fill(pane)).clipShape(shape)
+                .overlay {
+                    if let border = style.paneBorder {
+                        shape.strokeBorder(border, lineWidth: 1).allowsHitTesting(false)
+                    }
+                }
+                .padding(.horizontal, 8)
         } else {
             self
         }
@@ -569,6 +695,13 @@ struct SymbolTile: View {
                 .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.black, lineWidth: 1.5))
                 .overlay(glyph.foregroundStyle(.black))
                 .padding(1)
+        case .glyph(let rest, let ink, let on, let onInk):
+            // « Des coins qui réagissent » : choisie, la pastille s'arrondit et prend l'accent, sur un ressort.
+            RoundedRectangle(cornerRadius: selected ? 9 : 6, style: .continuous)
+                .fill(selected ? on : rest)
+                .overlay(glyph.foregroundStyle(selected ? onInk : ink).symbolVariant(selected ? .fill : .none))
+                .padding(1)
+                .animation(StyleTokens.Glyph.spring, value: selected)
         }
     }
 }
@@ -611,9 +744,7 @@ struct StyleSample: View {
             HStack(spacing: 8 * s) {
                 mark(t)
                 Text("saf")
-                    .font(t.fontFamily != nil ? t.font(15 * s, .medium)
-                          : .system(size: 15 * s, weight: t.searchWeight == .regular ? .regular : .semibold,
-                                    design: t.titleDesign ?? t.design).width(t.searchWidth ?? .standard))
+                    .font(Font(t.displayNSFont(15 * s) as CTFont))
                 Spacer(minLength: 0)
                 if let button = t.iconButton {
                     Circle().fill(button.fill).frame(width: 22 * s, height: 22 * s)
@@ -746,6 +877,8 @@ struct StyleCard: View {
             LinearGradient(colors: [Color(hex: "#1B1F4B"), Color(hex: "#3B1E5C"), Color(hex: "#0E3B4F")],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         case .atelier: AtelierPalette.current.secondary
+        case .glyph: AppSettings.shared.glyphAppearance == .night ? Color(hex: "#3A0B06")
+            : AppSettings.shared.glyphAccent.swatch
         case .phosphor: Color(hex: "#0B130D")
         case .paper: Color(hex: "#D9CFBF")
         case .brutal: Color(hex: "#7FD1FF")

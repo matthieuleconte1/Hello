@@ -97,7 +97,8 @@ struct LauncherView: View {
         .overlay {
             OpeningEffect(style: settings.panelStyle, tokens: style, trigger: model.revealID, size: size,
                           radius: PanelLayout.radius, pill: CGRect(x: 8, y: 7, width: size.width - 16, height: 46),
-                          underline: CGRect(x: 48, y: 47, width: min(size.width * 0.45, 360), height: 0))
+                          underline: CGRect(x: 48, y: 47, width: min(size.width * 0.45, 360), height: 0),
+                          mark: CGPoint(x: 29, y: 30))
         }
         .overlay {
             if model.dropTargeted && Hermes.available && model.mode == .root {
@@ -1555,7 +1556,8 @@ struct KeyCap: View {
         let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
         let filled = primary && style.primaryKeyFill != nil
         Text(key)
-            .font(.system(size: 11, weight: filled ? .bold : .medium, design: style.design == .monospaced ? .monospaced : .rounded))
+            .font(.system(size: 11, weight: filled ? .bold : .medium,
+                          design: style.design == .monospaced || style.monoKeys ? .monospaced : .rounded))
             .foregroundStyle(filled ? style.primaryKeyInk ?? style.keyInk : style.keyInk)
             .padding(.horizontal, 6)
             .frame(minWidth: 22, minHeight: 20)

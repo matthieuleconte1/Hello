@@ -778,7 +778,7 @@ private struct AppearanceSettings: View {
             }
 
             Section {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 14) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 14) {
                     ForEach(PanelStyle.allCases) { style in
                         StyleCard(style: style, selected: settings.panelStyle == style) {
                             withAnimation(.snappy(duration: 0.25)) { settings.panelStyle = style }
@@ -793,6 +793,21 @@ private struct AppearanceSettings: View {
             switch settings.panelStyle {
             case .glass: glassSections
             case .atelier: atelierSections
+            case .glyph:
+                Section {
+                    SwatchRow(items: GlyphAccent.allCases.map { ($0.id, $0.title, [$0.swatch]) },
+                              selected: settings.glyphAccent.id) { id in
+                        settings.glyphAccent = GlyphAccent(rawValue: id) ?? .orange
+                    }
+                    .disabled(settings.glyphAppearance == .night)
+                    Picker("Apparence", selection: $settings.glyphAppearance) {
+                        ForEach(GlyphAppearance.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: { Text("Atelier Glyphe") } footer: {
+                    Text("Une seule couleur, qui marque la touche ↵, le logo et l'icône choisie. La Nuit passe tout en rouge "
+                         + "sur noir pour préserver la vision nocturne : la forme prend le relais de la couleur.")
+                }
             case .phosphor:
                 Section {
                     SwatchRow(items: PhosphorColor.allCases.map { ($0.id, $0.title, [$0.colors.ink, $0.colors.screen]) },

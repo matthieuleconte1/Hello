@@ -953,6 +953,18 @@ final class LauncherModel: ObservableObject {
                 flash("Couleurs : \(palette.title)")
             })
         }
+        for accent in GlyphAccent.allCases {
+            list.append(Command(id: "cmd.glyph." + accent.rawValue, title: "Accent : \(accent.title)",
+                                subtitle: "Couleur unique du style Atelier Glyphe",
+                                keywords: "couleurs accent glyphe glyph theme",
+                                icon: .symbol("circle.grid.3x3.fill", .teal), actionTitle: "Appliquer") { [unowned self] in
+                AppSettings.shared.glyphAccent = accent
+                AppSettings.shared.panelStyle = .glyph
+                c.applyStyle()
+                refresh()
+                flash("Accent : \(accent.title)")
+            })
+        }
         list += [
             Command(id: "cmd.hotkey", title: "Raccourci global de Hello", subtitle: "Actuel : \(Prefs.hotkey.label)",
                     keywords: "raccourci hotkey shortcut clavier", icon: .symbol("keyboard", .gray)

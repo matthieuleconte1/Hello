@@ -223,8 +223,10 @@ enum Shell {
             let configs = URL(fileURLWithPath: home + "/.warp/launch_configurations", isDirectory: true)
             try? FileManager.default.createDirectory(at: configs, withIntermediateDirectories: true)
             let name = "hello-run.yaml"
-            let yaml = "---\nname: Hello\nwindows:\n  - tabs:\n      - layout:\n          cwd: \(directory)\n"
-                + "          commands:\n            - exec: \(file.path)\n"
+            // Valeurs entre apostrophes YAML : un dossier avec « : » ou « # » casserait le fichier.
+            let quoted = { (s: String) in "'" + s.replacingOccurrences(of: "'", with: "''") + "'" }
+            let yaml = "---\nname: Hello\nwindows:\n  - tabs:\n      - layout:\n          cwd: \(quoted(directory))\n"
+                + "          commands:\n            - exec: \(quoted(file.path))\n"
             try? yaml.write(to: configs.appendingPathComponent(name), atomically: true, encoding: .utf8)
             if let url = URL(string: "warp://launch/\(name)") { NSWorkspace.shared.open(url) }
         default:

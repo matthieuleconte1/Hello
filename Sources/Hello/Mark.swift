@@ -29,7 +29,7 @@ struct MarkRing: Shape {
     }
 }
 
-/// Le logo, dans la matière d'un style (les « cinq peaux »).
+/// Le logo, dans la matière d'un style (les « six peaux »).
 struct HelloMark: View {
     enum Skin {
         /// Verre : anneau dégradé, point blanc lumineux.
@@ -38,6 +38,8 @@ struct HelloMark: View {
         case ink(Color)
         /// Atelier : anneau d'encre, point en cookie Material.
         case atelier(ring: Color, dot: Color)
+        /// Atelier Glyphe : l'anneau devient une ligne de points (le chargeur de l'artifact), le point prend l'accent.
+        case glyph(ring: Color, dot: Color)
         /// Phosphore : anneau vert, le point devient le curseur bloc.
         case phosphor(Color)
         /// Papier : anneau d'encre, point vermillon.
@@ -80,6 +82,12 @@ struct HelloMark: View {
             trimmed.stroke(color, style: style)
         case .phosphor(let color):
             trimmed.stroke(color, style: style).shadow(color: color.opacity(0.6), radius: line * 0.5)
+        case .glyph(let color, _):
+            // Neuf points d'un bout à l'autre de l'arc : un tiret de longueur nulle à bouts ronds est un point.
+            let arc = MarkGeometry.ringRadius * 2 * .pi * MarkGeometry.spanDegrees / 360
+            let side = line / MarkGeometry.stroke
+            trimmed.stroke(color, style: StrokeStyle(lineWidth: line * 0.9, lineCap: .round,
+                                                     dash: [0, side * arc / 8.001]))
         case .brutal(let color):
             ZStack {
                 trimmed.stroke(Color.black, style: StrokeStyle(lineWidth: line * 1.3, lineCap: .round))
@@ -102,7 +110,7 @@ struct HelloMark: View {
                 .rotationEffect(.degrees(20))
         case .phosphor(let color):
             Rectangle().fill(color).frame(width: r * 1.08, height: 2 * r)
-        case .paper(_, let dot):
+        case .paper(_, let dot), .glyph(_, let dot):
             Circle().fill(dot).frame(width: 2 * r, height: 2 * r)
         case .brutal:
             Circle().fill(Color(hex: "#FFD84D"))
