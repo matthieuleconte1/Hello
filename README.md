@@ -3,20 +3,42 @@
 </p>
 
 <p align="center">
-  <b>Un lanceur natif pour macOS, façon Raycast ou Alfred : apps, terminal, presse-papiers, emoji, couleurs… derrière ⌘ Espace.</b><br>
+  <b>Un lanceur natif pour macOS, façon Raycast ou Alfred : apps, terminal, presse-papiers, emoji, couleurs, IA… derrière ⌘ Espace.</b><br>
   Swift · SwiftUI · Liquid Glass · aucune dépendance · macOS 14+
 </p>
 
 <p align="center">
-  <a href="#installation">Installation</a> ·
+  <a href="https://github.com/matthieuleconte1/Hello/releases/latest"><b>Télécharger la 2.1</b></a> ·
+  <a href="https://matthieuleconte1.github.io/Hello/">Site et démo en ligne</a> ·
   <a href="#ce-que-fait-hello">Fonctionnalités</a> ·
   <a href="#six-peaux">Six peaux</a> ·
-  <a href="#sous-le-capot">Sous le capot</a>
+  <a href="#installation">Installation</a>
 </p>
 
 <p align="center">
-  <img src="docs/hero.png" alt="Le panneau de Hello, style Verre" width="88%">
+  <img src="docs/hero.png" alt="Le panneau de Hello, style Atelier Glyphe en sombre" width="88%">
 </p>
+
+## Nouveau dans la 2.1
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screens/night.png" alt="La Nuit d'Atelier Glyphe : tout en rouge, ligne choisie cernée"></td>
+    <td width="50%"><img src="docs/screens/night-apps.png" alt="La grille d'applications en Nuit, icônes dessinées au trait"></td>
+  </tr>
+  <tr>
+    <td><b>La Nuit, au trait.</b> Tout passe dans un seul rouge sur du noir : la ligne choisie est cernée, ce qu'elle contient se remplit. Automatique aux heures choisies.</td>
+    <td><b>Icônes dessinées à l'encre.</b> Contour et traits intérieurs détourés automatiquement (XDoG), sur leur couleur atténuée ; l'icône choisie se remplit. Détail et opacité réglables.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screens/ai.png" alt="Une réponse de l'IA avec formule, tableau et notation mathématique"></td>
+    <td><img src="docs/styles/glyph.png" alt="Atelier Glyphe en clair"></td>
+  </tr>
+  <tr>
+    <td><b>L'IA écrit en Markdown et en LaTeX.</b> Tableaux, listes, code et formules (fractions, racines, sommes, matrices, <code>cases</code>, <code>aligned</code>) composés nativement avec STIX Two Math. Clic droit : copier le LaTeX.</td>
+    <td><b>Glyphe, clair et sombre retouchés.</b> Le panneau se détache mieux du cadre, la sélection passe en blanc cassé, les métadonnées sont plus lisibles. Les textes et les icônes se décodent en ASCII.</td>
+  </tr>
+</table>
 
 ## Ce que fait Hello
 
@@ -47,9 +69,18 @@ Dans une conversation IA, deux pressions distinctes sur **Échap** en moins de 2
 
 Le même lanceur, six directions artistiques complètes. Chacune a ses couleurs, sa typographie, sa sélection, ses icônes et **ses propres animations**.
 
-<p align="center">
-  <img src="docs/styles.png" alt="Atelier, Phosphore, Papier, Néo-brutal et Verre" width="100%">
-</p>
+<table>
+  <tr>
+    <td width="33%"><img src="docs/styles/glass.png" alt="Verre"><p align="center"><b>Verre</b></p></td>
+    <td width="33%"><img src="docs/styles/atelier.png" alt="Atelier Expressif"><p align="center"><b>Atelier Expressif</b></p></td>
+    <td width="33%"><img src="docs/styles/glyph.png" alt="Atelier Glyphe"><p align="center"><b>Atelier Glyphe</b></p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/styles/phosphor.png" alt="Phosphore"><p align="center"><b>Phosphore</b></p></td>
+    <td><img src="docs/styles/paper.png" alt="Papier"><p align="center"><b>Papier</b></p></td>
+    <td><img src="docs/styles/brutal.png" alt="Néo-brutal"><p align="center"><b>Néo-brutal</b></p></td>
+  </tr>
+</table>
 
 | Style | Matière | À l'ouverture |
 |---|---|---|
@@ -70,6 +101,10 @@ Un anneau ouvert et son point. C'est le « o » de *hello*, et la tête du refle
 <br clear="left">
 
 ## Installation
+
+Le plus simple : télécharger le `.dmg` de la [dernière version](https://github.com/matthieuleconte1/Hello/releases/latest) (Apple Silicon et Intel). Hello se met ensuite à jour tout seul : la nouvelle version s'affiche en tête du panneau, ↵ l'installe.
+
+Depuis les sources :
 
 ```sh
 git clone https://github.com/matthieuleconte1/Hello.git && cd Hello
@@ -100,7 +135,7 @@ Le raccourci par défaut est **⌘ Espace** : il faut alors libérer celui de Sp
 
 ## Sous le capot
 
-Environ 10 000 lignes de Swift, sans dépendance, dans un Swift Package (pas de projet Xcode).
+Environ 15 000 lignes de Swift, sans dépendance, dans un Swift Package (pas de projet Xcode).
 
 | Fichier | Rôle |
 |---|---|
@@ -120,4 +155,4 @@ L'icône et la bannière sont dessinées par du code : `swift Scripts/make-icon.
 
 ## Page web
 
-La page de présentation et son aperçu interactif sont dans [`website/`](website/README.md). Elle reprend les six styles et leurs palettes ; la démonstration reste locale au navigateur.
+La page de présentation et son aperçu interactif sont en ligne sur **[matthieuleconte1.github.io/Hello](https://matthieuleconte1.github.io/Hello/)**, publiés depuis [`website/`](website/README.md) à chaque modification. Elle reprend les styles et leurs palettes ; la démonstration reste locale au navigateur.
