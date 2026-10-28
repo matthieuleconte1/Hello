@@ -380,6 +380,11 @@ struct ResultList: View {
                     guard items.indices.contains(index) else { return }
                     proxy.scrollTo(items[index].id)
                 }
+                // Réouverture : la liste repart du haut, même si la sélection n'a pas bougé.
+                .onChange(of: model.resetCount) {
+                    guard let first = items.first else { return }
+                    proxy.scrollTo(first.id, anchor: .top)
+                }
             }
         }
     }
@@ -442,11 +447,12 @@ struct ResultRow: View {
 struct ItemIconView: View {
     let icon: ItemIcon
     @Environment(\.styleTokens) private var style
+    @Environment(\.rowSelected) private var selected
 
     var body: some View {
         switch icon {
         case .file(let path):
-            Image(nsImage: IconCache.icon(path)).resizable().interpolation(.high).styledIcon(style)
+            AppIconImage(image: IconCache.icon(path), path: path)
         case .symbol(let name, let tint):
             SymbolTile(name: name, tint: tint)
         case .color(let color):
@@ -458,6 +464,7 @@ struct ItemIconView: View {
             Thumbnail(url: url, pixels: 64, fill: true)
                 .frame(width: 26, height: 26)
                 .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .opacity(selected ? 1 : style.iconOpacity)
         }
     }
 }
@@ -559,7 +566,7 @@ struct AppPage: View {
         // réduit la liste, page en cours de retrait) : elle s'affiche alors vide au lieu de lire hors limites.
         let end = min(start + perPage, items.count)
         let slice = start < end ? Array(items[start..<end].enumerated()) : []
-        // Glyphe : les icônes se décodent quand la page apparaît, puis celle qu'on sélectionne.
+        // Glyphe : les icônes passent de l'ASCII à l'image quand la page apparaît, puis celle qu'on sélectionne.
         let arrivals = Motion.decodes
             ? clock.arrivals(slice.map(\.element.id), selected: selection >= start && selection < end ? items[selection].id : nil,
                              reveal: nil, columns: columns)
@@ -648,7 +655,7 @@ struct AppCell: View {
     let size: CGSize
     let iconSize: CGFloat
     let selected: Bool
-    /// Décodage de l'icône et du nom (Glyphe).
+    /// Décodage de l'icône (fondu depuis l'ASCII) et du nom (Glyphe).
     var decode: DecodeCue? = nil
     /// Survol propre à chaque case : seules les deux cases concernées se redessinent quand la souris passe
     /// de l'une à l'autre (un état partagé redessinait toute la grille, y compris pendant le glissement des pages).
@@ -665,8 +672,7 @@ struct AppCell: View {
                 if case .file(let path) = item.icon {
                     // Pas encore chargée : emplacement discret, l'icône apparaît en fondu.
                     if let image = icon.image ?? IconCache.cachedIcon(path, large: true) {
-                        Image(nsImage: image).resizable().interpolation(.high)
-                            .styledIcon(style)
+                        AppIconImage(image: image, path: path, large: true)
                             .transition(.opacity)
                     } else {
                         RoundedRectangle(cornerRadius: iconSize * 0.22, style: .continuous)
@@ -678,7 +684,9 @@ struct AppCell: View {
                 }
             }
             .frame(width: iconSize, height: iconSize)
-            .modifier(AsciiReveal(cue: decode))
+            // La Nuit : l'icône soulevée reprend sa pleine couleur.
+            .environment(\.rowSelected, raised)
+            .modifier(AsciiFade(cue: decode, source: item.icon.asciiSource, ink: selected ? style.selectionInk : nil))
             // Ombre seulement sous l'icône soulevée : des dizaines d'ombres qui glissent coûtent cher à chaque image.
             .background {
                 if raised {
@@ -699,7 +707,8 @@ struct AppCell: View {
                     Circle().fill(selected && style.selectionInk != nil ? AnyShapeStyle(.primary) : AnyShapeStyle(style.live))
                         .frame(width: 4, height: 4)
                 }
-                DecodeText(text: item.title, start: decode?.start, quick: decode?.quick ?? false)
+                // Seul le nom de la case choisie se décode : trente-cinq textes animés à la fois saccadaient.
+                DecodeText(text: item.title, start: selected ? decode?.start : nil, quick: decode?.quick ?? false)
                     .font(style.font(12, style.titleWeight, title: true))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -761,7 +770,7 @@ struct SelectionFill: View {
             ZStack(alignment: .leading) {
                 if let offset = style.selectionHardShadow { shape.fill(Color.black).offset(x: offset, y: offset) }
                 shape.fill(style.selectionFill)
-                if let border = style.selectionBorder { shape.strokeBorder(border, lineWidth: 2) }
+                if let border = style.selectionBorder { shape.strokeBorder(border, lineWidth: style.selectionBorderWidth) }
                 if let bar = style.selectionBar {
                     Capsule().fill(bar).frame(width: 3).padding(.vertical, 10).padding(.leading, 3)
                 }
@@ -976,8 +985,9 @@ struct GlyphGrid: View {
                         ForEach(Array(glyphs.enumerated()), id: \.element.id) { index, glyph in
                             Text(glyph.char)
                                 .font(.system(size: glyph.isEmoji ? 30 : 24))
-                                .modifier(AsciiReveal(cue: arrivals.indices.contains(index)
-                                    ? clock.cue(arrivals[index], id: glyph.id) : nil))
+                                .modifier(AsciiFade(cue: arrivals.indices.contains(index)
+                                    ? clock.cue(arrivals[index], id: glyph.id) : nil, source: .char(glyph.char),
+                                                    ink: index == selection ? StyleTokens.current.selectionInk : nil))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 54)
                                 .modifier(InkOverride(color: index == selection ? StyleTokens.current.selectionInk : nil))
@@ -1238,6 +1248,7 @@ struct OutputView: View {
 
 struct AgentView: View {
     @ObservedObject var run: AgentRun
+    @Environment(\.styleTokens) private var style
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -1321,7 +1332,7 @@ struct AgentView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 7) {
                         Image(systemName: current ? "circle.dotted" : "checkmark")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(current ? AnyShapeStyle(.purple) : AnyShapeStyle(.tertiary))
+                            .foregroundStyle(current ? AnyShapeStyle(style.monochrome ?? .purple) : AnyShapeStyle(.tertiary))
                             .symbolEffect(.pulse, isActive: current)
                         Text(step)
                             .font(step.hasPrefix("$ ") ? .system(size: 11.5, design: .monospaced) : .system(size: 12))
@@ -1340,9 +1351,9 @@ struct AgentView: View {
               : "Niveau \(run.level.rawValue) · \(run.level.title)",
               systemImage: run.level.symbol)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(run.level.tint)
+            .foregroundStyle(style.monochrome ?? run.level.tint)
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Capsule().fill(run.level.tint.opacity(0.14)))
+            .background(Capsule().fill((style.monochrome ?? run.level.tint).opacity(0.14)))
     }
 
     private var elapsed: some View {
@@ -1355,7 +1366,7 @@ struct AgentView: View {
     private func status(_ symbol: String, _ tint: Color, _ text: String) -> some View {
         Label(text, systemImage: symbol)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(tint)
+            .foregroundStyle(style.monochrome ?? tint)
     }
 
     private func promptBox(_ prompt: String) -> some View {
@@ -1371,6 +1382,7 @@ struct AgentView: View {
 /// Échange précédent d'une conversation : la demande, puis la réponse, en plus discret que l'échange en cours.
 struct PastTurn: View {
     let turn: ChatTurn
+    @Environment(\.styleTokens) private var style
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1379,7 +1391,7 @@ struct PastTurn: View {
                 Spacer(minLength: 8)
                 Label(turn.agentLevel.title, systemImage: turn.agentLevel.symbol)
                     .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(turn.agentLevel.tint)
+                    .foregroundStyle(style.monochrome ?? turn.agentLevel.tint)
             }
             if turn.kind == .code {
                 Label("Envoyé à une session de code dans le terminal", systemImage: "arrow.up.forward.app")
@@ -1437,85 +1449,9 @@ struct AttachmentThumb: View {
     }
 }
 
-/// Markdown simple rendu ligne par ligne : titres, listes, citations, blocs de code, liens et styles en ligne.
-struct MarkdownText: View {
-    let text: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                switch block {
-                case .heading(let level, let content):
-                    Text(inline(content))
-                        .font(.system(size: level == 1 ? 17 : level == 2 ? 15 : 14, weight: .bold))
-                        .padding(.top, 4)
-                case .bullet(let marker, let content):
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(marker).foregroundStyle(.secondary)
-                        Text(inline(content))
-                    }
-                case .quote(let content):
-                    Text(inline(content))
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, 10)
-                        .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.4)).frame(width: 2) }
-                case .code(let content):
-                    Text(content)
-                        .font(.system(size: 12, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.quinary))
-                case .paragraph(let content):
-                    Text(inline(content))
-                }
-            }
-        }
-        .font(.system(size: 13.5))
-        .textSelection(.enabled)
-        .tint(.cyan)
-    }
-
-    private enum Block {
-        case heading(Int, String), bullet(String, String), quote(String), code(String), paragraph(String)
-    }
-
-    private var blocks: [Block] {
-        var out: [Block] = []
-        var code: [String]?
-        for raw in text.components(separatedBy: "\n") {
-            let line = raw.trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("```") {
-                if let lines = code { out.append(.code(lines.joined(separator: "\n"))); code = nil } else { code = [] }
-                continue
-            }
-            if code != nil { code?.append(raw); continue }
-            if line.isEmpty { continue }
-            if line.hasPrefix("#") {
-                let level = line.prefix { $0 == "#" }.count
-                out.append(.heading(level, line.dropFirst(level).trimmingCharacters(in: .whitespaces)))
-            } else if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• ") {
-                out.append(.bullet("•", String(line.dropFirst(2))))
-            } else if let dot = line.firstIndex(of: "."), line[..<dot].allSatisfy(\.isNumber), !line[..<dot].isEmpty,
-                      line[line.index(after: dot)...].hasPrefix(" ") {
-                out.append(.bullet(String(line[...dot]), line[line.index(after: dot)...].trimmingCharacters(in: .whitespaces)))
-            } else if line.hasPrefix(">") {
-                out.append(.quote(line.dropFirst().trimmingCharacters(in: .whitespaces)))
-            } else {
-                out.append(.paragraph(line))
-            }
-        }
-        if let lines = code { out.append(.code(lines.joined(separator: "\n"))) }
-        return out
-    }
-
-    private func inline(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
-            ?? AttributedString(s)
-    }
-}
-
 struct RunStatus: View {
     @ObservedObject var run: ShellRun
+    @Environment(\.styleTokens) private var style
 
     var body: some View {
         if run.running {
@@ -1524,7 +1460,7 @@ struct RunStatus: View {
             Label((status == 0 ? "OK" : "Code \(status)") + " · " + run.elapsed,
                   systemImage: status == 0 ? "checkmark.circle.fill" : "xmark.octagon.fill")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(status == 0 ? .green : .red)
+                .foregroundStyle(style.monochrome ?? (status == 0 ? .green : .red))
         }
     }
 }

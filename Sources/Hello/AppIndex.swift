@@ -180,7 +180,8 @@ enum IconCache {
 
     /// Charge les grandes icônes manquantes hors du fil principal, lot par lot (une page par lot),
     /// et prévient après chaque lot (avec son numéro de page). Un nouvel appel (nouvelle recherche) abandonne le précédent.
-    static func preload(_ batches: [(page: Int, paths: [String])], onBatch: @escaping (Int) -> Void) {
+    /// `ascii` : prépare aussi leur version ASCII (Glyphe), pour que le fondu des cases soit prêt à l'affichage.
+    static func preload(_ batches: [(page: Int, paths: [String])], ascii: Bool = false, onBatch: @escaping (Int) -> Void) {
         lock.lock()
         generation += 1
         let mine = generation
@@ -192,8 +193,11 @@ enum IconCache {
                 lock.unlock()
                 if stale { return }
                 let missing = batch.paths.filter { cachedIcon($0, large: true) == nil }
-                guard !missing.isEmpty else { continue }
+                let art = ascii ? batch.paths.filter { AsciiArt.cached(.app($0)) == nil } : []
+                guard !missing.isEmpty || !art.isEmpty else { continue }
                 DispatchQueue.concurrentPerform(iterations: missing.count) { _ = icon(missing[$0], large: true) }
+                DispatchQueue.concurrentPerform(iterations: art.count) { AsciiArt.warm(.app(art[$0])) }
+                guard !missing.isEmpty else { continue }
                 DispatchQueue.main.async { onBatch(batch.page) }
             }
         }

@@ -666,6 +666,203 @@ struct AsciiReveal: ViewModifier {
     }
 }
 
+/// Glyphe, version légère des grilles (apps, emoji) : l'élément apparaît d'abord en ASCII, son image en cache,
+/// puis passe en fondu à l'image réelle. Un seul fondu d'opacité, joué par Core Animation : rien n'est redessiné
+/// image par image, même avec des dizaines d'icônes qui glissent d'une page à l'autre.
+struct AsciiFade: ViewModifier {
+    let cue: DecodeCue?
+    let source: AsciiArt.Source?
+    /// Encre de l'ASCII (celle de la sélection sur la case choisie).
+    var ink: Color? = nil
+    @StateObject private var fade = AsciiFadeState()
+
+    func body(content: Content) -> some View {
+        if Motion.decodes {
+            content
+                .opacity(fade.ascii ? 0 : 1)
+                .overlay {
+                    if fade.layered, let art = fade.art {
+                        Image(nsImage: art).renderingMode(.template).resizable().interpolation(.medium)
+                            .aspectRatio(contentMode: .fit)
+                            .foregroundStyle(ink.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.primary))
+                            .opacity(fade.ascii ? 1 : 0)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .task(id: source) { fade.load(source) }
+                .task(id: cue?.start) { await fade.play(cue) }
+        } else {
+            content
+        }
+    }
+}
+
+@MainActor final class AsciiFadeState: ObservableObject {
+    @Published private(set) var art: NSImage?
+    /// L'ASCII remplace l'image (avant le fondu).
+    @Published private(set) var ascii = false
+    /// Le calque ASCII existe : seulement le temps du fondu, pas de calque de plus le reste du temps.
+    @Published private(set) var layered = false
+    private var source: AsciiArt.Source?
+
+    func load(_ source: AsciiArt.Source?) {
+        guard let source, source != self.source else { return }
+        self.source = source
+        if let hit = AsciiArt.cached(source) { art = hit; return }
+        AsciiArt.request(source) { [weak self] image in
+            guard let self, self.source == source else { return }
+            art = image
+        }
+    }
+
+    func play(_ cue: DecodeCue?) async {
+        guard let cue, Motion.enabled else { return }
+        let wait = cue.start.timeIntervalSinceNow
+        if wait > 0 {
+            do { try await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) } catch { return }
+        }
+        // Repère dépassé (case créée en cours de route) : rien à rattraper.
+        guard cue.start.timeIntervalSinceNow > -0.15 else { return }
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            ascii = true
+            layered = true
+        }
+        do {
+            try await Task.sleep(nanoseconds: UInt64((cue.quick ? 0.05 : 0.1) / Motion.speed * 1_000_000_000))
+        } catch {
+            withTransaction(instant) { ascii = false; layered = false }
+            return
+        }
+        withAnimation(.easeOut(duration: (cue.quick ? 0.2 : 0.3) / Motion.speed)) {
+            ascii = false
+        } completion: { [weak self] in
+            guard let self, !ascii else { return }
+            layered = false
+        }
+    }
+}
+
+/// Glyphe : la version ASCII d'une icône ou d'un caractère. Chaque case prend le caractère de la rampe qui
+/// correspond à sa densité (opacité × clarté). Calculée une fois hors du fil principal, puis gardée en cache ;
+/// image gabarit, teintée par l'encre.
+enum AsciiArt {
+    enum Source: Hashable {
+        /// Grande icône d'une app (celle de la grille).
+        case app(String)
+        /// Emoji ou symbole.
+        case char(String)
+
+        fileprivate var key: NSString {
+            switch self {
+            case .app(let path): "A:" + path as NSString
+            case .char(let char): "C:" + char as NSString
+            }
+        }
+    }
+
+    private static let cache = NSCache<NSString, NSImage>()
+    private static let queue = DispatchQueue(label: "hello.ascii", qos: .userInitiated, attributes: .concurrent)
+    /// Cases par côté, pixels par case.
+    private static let side = 12
+    private static let cell = 16
+    private static let ramp = Array(" .:-=+*#%@")
+
+    static func cached(_ source: Source) -> NSImage? { cache.object(forKey: source.key) }
+
+    /// Tout de suite si elle est en cache, sinon calculée à part et rendue sur le fil principal.
+    static func request(_ source: Source, done: @escaping (NSImage) -> Void) {
+        if let hit = cached(source) { return done(hit) }
+        queue.async {
+            guard let art = warm(source) else { return }
+            DispatchQueue.main.async { done(art) }
+        }
+    }
+
+    /// Calcule (hors du fil principal) et met en cache.
+    @discardableResult
+    static func warm(_ source: Source) -> NSImage? {
+        if let hit = cached(source) { return hit }
+        let image: CGImage?
+        switch source {
+        case .app(let path):
+            image = IconCache.icon(path, large: true).cgImage(forProposedRect: nil, context: nil, hints: nil)
+        case .char(let char):
+            image = render(char)
+        }
+        guard let image, let art = make(image) else { return nil }
+        cache.setObject(art, forKey: source.key)
+        return art
+    }
+
+    /// Un caractère dessiné seul, centré (les emoji gardent leurs couleurs, les symboles sont blancs).
+    private static func render(_ char: String) -> CGImage? {
+        let px = 96
+        guard let context = bitmap(px, px) else { return nil }
+        let font = CTFontCreateUIFontForLanguage(.system, 72, nil) ?? CTFontCreateWithName("Helvetica" as CFString, 72, nil)
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: char, attributes: [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 1, alpha: 1),
+        ]))
+        let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        context.textPosition = CGPoint(x: (CGFloat(px) - bounds.width) / 2 - bounds.minX,
+                                       y: (CGFloat(px) - bounds.height) / 2 - bounds.minY)
+        CTLineDraw(line, context)
+        return context.makeImage()
+    }
+
+    /// Les caractères de la rampe, prêts à dessiner (blancs, chasse fixe).
+    private static let lines: [CTLine] = {
+        let font = CTFontCreateWithName("Menlo-Bold" as CFString, CGFloat(cell) * 1.2, nil)
+        return ramp.map { char in
+            CTLineCreateWithAttributedString(NSAttributedString(string: String(char), attributes: [
+                NSAttributedString.Key(kCTFontAttributeName as String): font,
+                NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 1, alpha: 1),
+            ]))
+        }
+    }()
+
+    private static func make(_ source: CGImage) -> NSImage? {
+        let n = side
+        // Réduction à une case par pixel : la couleur moyenne de chaque case.
+        guard let small = bitmap(n, n) else { return nil }
+        small.interpolationQuality = .medium
+        small.draw(source, in: CGRect(x: 0, y: 0, width: n, height: n))
+        guard let data = small.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
+        let size = n * cell
+        guard let out = bitmap(size, size) else { return nil }
+        for row in 0..<n {
+            for column in 0..<n {
+                // Première rangée en mémoire : le haut de l'image.
+                let p = data + (row * small.bytesPerRow + column * 4)
+                let alpha = Double(p[3]) / 255
+                guard alpha > 0.02 else { continue }
+                let light = (0.3 * Double(p[0]) + 0.59 * Double(p[1]) + 0.11 * Double(p[2])) / 255 / alpha
+                let density = alpha * (0.35 + 0.65 * min(light, 1))
+                let index = min(ramp.count - 1, Int(density * Double(ramp.count - 1) + 0.5))
+                guard index > 0 else { continue }
+                let line = lines[index]
+                let width = CTLineGetTypographicBounds(line, nil, nil, nil)
+                out.textPosition = CGPoint(x: Double(column * cell) + (Double(cell) - width) / 2,
+                                           y: Double((n - 1 - row) * cell) + Double(cell) * 0.2)
+                CTLineDraw(line, out)
+            }
+        }
+        guard let image = out.makeImage() else { return nil }
+        let art = NSImage(cgImage: image, size: NSSize(width: size / 2, height: size / 2))
+        art.isTemplate = true
+        return art
+    }
+
+    private static func bitmap(_ width: Int, _ height: Int) -> CGContext? {
+        CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    }
+}
+
 /// Glyphe : un décodage à jouer, sur un titre ou une icône. `quick` : la version brève de l'utilisation.
 struct DecodeCue: Equatable {
     let start: Date

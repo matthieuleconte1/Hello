@@ -274,6 +274,26 @@ final class AppSettings: ObservableObject {
     @Published var glyphNightLevel = value("glyphNightLevel", 0.85) {
         didSet { Self.d.set(glyphNightLevel, forKey: "glyphNightLevel") }
     }
+    /// Nuit : les icônes d'apps au trait, cernées d'un filet rouge le long de leur bord.
+    @Published var glyphNightOutline = value("glyphNightOutline", true) {
+        didSet { Self.d.set(glyphNightOutline, forKey: "glyphNightOutline") }
+    }
+    /// Nuit : opacité des icônes d'apps au repos (pleine sur l'élément choisi), 0,1 à 1.
+    /// Traits intérieurs des icônes, détourés automatiquement (avec le contour).
+    @Published var glyphNightEdges = value("glyphNightEdges", true) {
+        didSet { Self.d.set(glyphNightEdges, forKey: "glyphNightEdges") }
+    }
+    /// Détail des traits intérieurs : 0, seulement les grandes formes ; 1, tout ce qui contraste.
+    @Published var glyphNightEdgeDetail = value("glyphNightLineDetail", 0.6) {
+        didSet { Self.d.set(glyphNightEdgeDetail, forKey: "glyphNightLineDetail") }
+    }
+    @Published var glyphNightIconOpacity = value("glyphNightIconOpacity", 0.25) {
+        didSet { Self.d.set(glyphNightIconOpacity, forKey: "glyphNightIconOpacity") }
+    }
+    /// Nuit : les icônes gardent leurs couleurs (atténuées) au lieu de passer au rouge.
+    @Published var glyphNightIconColors = value("glyphNightIconColors", false) {
+        didSet { Self.d.set(glyphNightIconColors, forKey: "glyphNightIconColors") }
+    }
 
     /// Apparence de Glyphe à cet instant : la Nuit automatique l'emporte pendant sa plage horaire.
     var glyphEffectiveAppearance: GlyphAppearance {
@@ -444,6 +464,11 @@ final class AppSettings: ObservableObject {
         glyphNightStart = 22
         glyphNightEnd = 7
         glyphNightLevel = 0.85
+        glyphNightOutline = true
+        glyphNightEdges = true
+        glyphNightEdgeDetail = 0.6
+        glyphNightIconOpacity = 0.25
+        glyphNightIconColors = false
         phosphorColor = .green
         paperTone = .cream
         brutalColor = .pink

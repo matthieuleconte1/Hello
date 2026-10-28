@@ -165,6 +165,7 @@ struct StyleTokens {
     var selectionFill: Color
     var selectionInk: Color?
     var selectionBorder: Color?
+    var selectionBorderWidth: CGFloat = 2
     var selectionBar: Color?
     var selectionHardShadow: CGFloat?
     var rowRadius: CGFloat
@@ -223,6 +224,15 @@ struct StyleTokens {
     var tile: TileStyle = .tinted
     /// Icônes d'apps monochromes (Phosphore).
     var iconTint: Color?
+    /// Opacité des icônes d'apps au repos (la Nuit) ; pleine sur l'élément choisi.
+    var iconOpacity = 1.0
+    /// Icônes d'apps cernées d'un filet à l'encre, le long de leur bord (la Nuit : « au trait »).
+    var iconOutline = false
+    /// Avec le filet, les traits intérieurs de l'icône, détourés automatiquement : l'icône devient un dessin au trait.
+    /// Valeur : niveau de détail (0 : seulement les grandes formes, 1 : tout ce qui contraste) ; nil : pas de traits.
+    var iconEdges: Double?
+    /// Une seule couleur pour tout ce qui en aurait une autre (statuts de l'IA, liens, badges) : la Nuit.
+    var monochrome: Color?
     var scanlines = false
     /// Mouvement de la sélection ; nil : saut net.
     var motion: Animation?
@@ -407,11 +417,13 @@ struct StyleTokens {
         static let onFrame = Color.white
         static let frameHi = Color.white.opacity(0.07)
         static let frameLine = Color.white.opacity(0.1)
-        // Sombre
-        static let pane = Color(hex: "#080604")
-        static let ctrl = Color(hex: "#242424")
-        static let inv = Color(hex: "#F1F1F1")
+        // Sombre : le panneau se détache du cadre d'un cran (assez pour lire la profondeur, sans griser le noir),
+        // sélection en blanc cassé chaud plutôt qu'un blanc pur qui éblouit dans le noir.
+        static let pane = Color(hex: "#100E0C")
+        static let ctrl = Color(hex: "#262421")
+        static let inv = Color(hex: "#ECE9E4")
         static let onInv = Color(hex: "#111111")
+        static let paneLine = Color.white.opacity(0.08)
         // Clair
         static let paneLight = Color(hex: "#EFEEEC")
         static let ctrlLight = Color(hex: "#E7E5E2")
@@ -445,7 +457,7 @@ struct StyleTokens {
             searchWidth: .expanded, titleWeight: .semibold, searchWeight: .medium, header: .label,
             markSkin: .glyph(ring: g.onFrame, dot: frameAccent),
             fontFamily: "Red Hat Display", displayFamily: "Zalando Sans Expanded",
-            paneBorder: dark ? g.frameLine : nil,
+            paneBorder: dark ? g.paneLine : nil, strongMeta: dark,
             keyFill: g.frameHi, keyInk: g.onFrame.opacity(0.62), keyBorder: Color.white.opacity(0.14),
             primaryKeyFill: frameAccent, primaryKeyInk: mono ? g.frame : onAccent, monoKeys: true,
             asciiReveal: true,
@@ -457,15 +469,18 @@ struct StyleTokens {
     /// La Nuit de l'artifact : une seule teinte, alors la forme prend le relais de la couleur.
     /// Rempli = choisi · trait plein = disponible · pointillé = secondaire · décalage du trait = hauteur.
     /// Pas de lueur ni d'ombre floue : la seule lumière est ce rouge, à la luminosité réglée.
+    /// La ligne choisie est cernée (un bloc rouge plein éblouit dans le noir) ; ce qu'elle contient se remplit :
+    /// pastille rouge, icône en couleur pleine aux traits gravés.
     private static func glyphNight(level: Double) -> StyleTokens {
         let g = Glyph.self
+        let settings = AppSettings.shared
         let red = g.red(level)
         let line = g.redLine(0.58)
         return StyleTokens(
             surface: .inset(frame: .black, pane: .black),
             dark: true, ink: red, chromeInk: red, chromeDark: true,
             accent: red, accent2: red, live: red, toast: red,
-            selectionFill: red, selectionInk: .black,
+            selectionFill: g.redLine(0.1), selectionBorder: red, selectionBorderWidth: 1.5,
             rowRadius: 12, cellRadius: 14, radius: 22, border: (line, 1), hardShadow: 6,
             hardShadowColor: g.redLine(0.36), divider: .clear,
             searchWidth: .expanded, titleWeight: .medium, searchWeight: .regular, header: .label,
@@ -475,8 +490,13 @@ struct StyleTokens {
             keyFill: .clear, keyInk: red, keyBorder: line,
             primaryKeyFill: red, primaryKeyInk: .black, monoKeys: true,
             chromeCaps: true, sectionRule: g.redLine(0.32), launchTint: red, asciiReveal: true,
-            tile: .glyph(rest: .clear, ink: red, selected: .black, selectedInk: red, stroke: line),
-            iconTint: red, motion: g.spring)
+            tile: .glyph(rest: .clear, ink: red, selected: red, selectedInk: .black, stroke: line),
+            iconTint: settings.glyphNightIconColors ? nil : red,
+            // Sans contour, une icône à 0 % disparaîtrait.
+            iconOpacity: settings.glyphNightOutline ? settings.glyphNightIconOpacity : max(settings.glyphNightIconOpacity, 0.1),
+            iconOutline: settings.glyphNightOutline, iconEdges: settings.glyphNightEdges ? settings.glyphNightEdgeDetail : nil,
+            monochrome: red,
+            motion: g.spring)
     }
 
     private static func phosphor(_ color: PhosphorColor) -> StyleTokens {
@@ -776,6 +796,175 @@ extension View {
         } else {
             self
         }
+    }
+}
+
+/// Icône d'app dans la matière du style. La Nuit : au trait — un filet à l'encre le long de son bord, et ses
+/// traits intérieurs détourés — sur sa couleur atténuée au repos. Choisie, elle se remplit (« rempli = choisi,
+/// trait = disponible ») et ses traits passent en noir, gravés dans la couleur.
+struct AppIconImage: View {
+    let image: NSImage
+    let path: String
+    var large = false
+    @Environment(\.styleTokens) private var style
+    @Environment(\.rowSelected) private var selected
+    @StateObject private var outline = IconOutlineLoader()
+
+    var body: some View {
+        let kind = style.iconOutline ? IconOutline.Kind(large: large, detail: style.iconEdges) : nil
+        Image(nsImage: image).resizable().interpolation(.high)
+            .styledIcon(style)
+            .opacity(selected ? 1 : style.iconOpacity)
+            .overlay {
+                if kind != nil, let drawing = outline.image {
+                    Image(nsImage: drawing).renderingMode(.template).resizable().interpolation(.high)
+                        .foregroundStyle(selected && style.iconTint != nil ? Color.black.opacity(0.85) : style.ink)
+                        .allowsHitTesting(false)
+                }
+            }
+            .animation(Motion.scaled(.easeOut(duration: 0.15)), value: selected)
+            .task(id: kind.map { "\($0.key)\(path)" }) {
+                if let kind { outline.load(path, kind: kind) }
+            }
+    }
+}
+
+/// Contour d'une case (@State n'est pas disponible sans Xcode complet).
+@MainActor final class IconOutlineLoader: ObservableObject {
+    @Published private(set) var image: NSImage?
+    private var key: String?
+    private var pending: Operation?
+
+    /// Case sortie de l'écran (page passée en glissant) : son calcul, pas encore commencé, n'a plus lieu d'être.
+    deinit { pending?.cancel() }
+
+    func load(_ path: String, kind: IconOutline.Kind) {
+        let key = kind.key + path
+        guard key != self.key else { return }
+        self.key = key
+        pending?.cancel()
+        pending = nil
+        if let hit = IconOutline.cached(path, kind: kind) { image = hit; return }
+        image = nil
+        pending = IconOutline.request(path, kind: kind) { [weak self] ring in
+            guard let self, self.key == key else { return }
+            withAnimation(Motion.scaled(.easeOut(duration: 0.2))) { self.image = ring }
+        }
+    }
+}
+
+/// Le contour d'une icône d'app : un filet le long du bord intérieur de sa partie opaque (son ombre portée,
+/// à moitié transparente, n'en fait pas partie), et au besoin ses traits intérieurs, détourés par `IconTrace`
+/// (aplats de couleur, contours suivis par Vision). Calculé hors du fil principal et gardé en cache ; image gabarit, teintée
+/// par l'encre.
+enum IconOutline {
+    /// Taille de calcul et épaisseurs : le dessin garde le même trait à l'écran, quelle que soit la résolution
+    /// de l'icône (lignes de la liste ≈ 26 pt, cases de la grille ≈ 76 pt).
+    struct Kind {
+        let large: Bool
+        /// Détail des traits intérieurs ; nil : le filet seul.
+        let detail: Double?
+        var side: Int { large ? 320 : 128 }
+        var radius: Double { large ? 6 : 4.5 }
+        var key: String { (large ? "L" : "S") + (detail.map { String(format: "%.2f", $0) } ?? "") + ":" }
+        /// Épaisseur des traits intérieurs, en pixels de calcul (≈ 0,8 pt dans la grille, 0,5 pt dans la liste).
+        var lineWidth: CGFloat { large ? 3.4 : 2.6 }
+    }
+
+    private static let cache = NSCache<NSString, NSImage>()
+    /// Deux calculs à la fois, en priorité basse : une page de grille en demande des dizaines d'un coup, et une file
+    /// sans limite occupait tous les cœurs au point de geler le glissement des pages.
+    private static let queue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "hello.outline"
+        queue.maxConcurrentOperationCount = 2
+        queue.qualityOfService = .utility
+        return queue
+    }()
+    static func cached(_ path: String, kind: Kind) -> NSImage? { cache.object(forKey: kind.key + path as NSString) }
+
+    @discardableResult
+    static func request(_ path: String, kind: Kind, done: @escaping (NSImage) -> Void) -> Operation {
+        let operation = BlockOperation()
+        operation.addExecutionBlock { [unowned operation] in
+            guard !operation.isCancelled else { return }
+            // Déjà calculée entre-temps (même icône demandée par la liste et la grille, ou deux fois de suite).
+            if let hit = cached(path, kind: kind) { return DispatchQueue.main.async { done(hit) } }
+            let icon = IconCache.icon(path, large: kind.large)
+            guard let cg = icon.cgImage(forProposedRect: nil, context: nil, hints: nil),
+                  let ring = make(cg, side: kind.side, radius: kind.radius, detail: kind.detail, lineWidth: kind.lineWidth) else { return }
+            let image = NSImage(cgImage: ring, size: icon.size)
+            image.isTemplate = true
+            cache.setObject(image, forKey: kind.key + path as NSString)
+            DispatchQueue.main.async { done(image) }
+        }
+        queue.addOperation(operation)
+        return operation
+    }
+
+    /// Chaque pixel opaque à moins de `radius` pixels du dehors fait partie du filet ; le bord intérieur est adouci
+    /// selon la distance, le bord extérieur reprend celui de l'icône. Calculé sur `side` pixels de côté, quelle que
+    /// soit la résolution de l'icône (le filet garde la même épaisseur à l'écran).
+    ///
+    /// `detail` : s'y ajoutent les traits intérieurs (au-delà du filet, pour ne pas le doubler).
+    static func make(_ source: CGImage, side: Int, radius: Double, detail: Double? = nil,
+                     lineWidth: CGFloat = 3) -> CGImage? {
+        let width = side
+        let height = side
+        guard width > 0, height > 0,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let data = context.data?.assumingMemoryBound(to: UInt8.self) else { return nil }
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let lines = detail.flatMap { detail in
+            context.makeImage().flatMap { IconTrace.lines($0, side: side, detail: detail, width: Double(lineWidth)) }
+        }
+        let alpha = (0..<(width * height)).map { data[$0 * 4 + 3] }
+        let inside = alpha.map { $0 >= 128 }
+        // Voisins à visiter, du plus proche au plus loin : le premier pixel du dehors donne la distance.
+        let reach = Int(radius.rounded(.up)) + 1
+        var offsets: [(dx: Int, dy: Int, distance: Double)] = []
+        for dy in -reach...reach {
+            for dx in -reach...reach where dx != 0 || dy != 0 {
+                let distance = (Double(dx * dx + dy * dy)).squareRoot()
+                if distance <= Double(reach) { offsets.append((dx, dy, distance)) }
+            }
+        }
+        offsets.sort { $0.distance < $1.distance }
+        for y in 0..<height {
+            for x in 0..<width {
+                let index = y * width + x
+                var value = 0.0
+                if inside[index] {
+                    var nearest = Double(reach) + 1
+                    for offset in offsets {
+                        let nx = x + offset.dx
+                        let ny = y + offset.dy
+                        if nx < 0 || ny < 0 || nx >= width || ny >= height || !inside[ny * width + nx] {
+                            nearest = offset.distance
+                            break
+                        }
+                    }
+                    value = min(max(radius + 0.5 - nearest, 0), 1)
+                    // Trait intérieur : il rejoint le filet (le long du bord, il se fond dedans).
+                    if let lines { value = max(value, Double(lines[index]) / 255) }
+                } else if alpha[index] >= 40 {
+                    // Bord adouci de l'icône, juste contre sa partie opaque.
+                    let touches = [(1, 0), (-1, 0), (0, 1), (0, -1)].contains { dx, dy in
+                        let nx = x + dx, ny = y + dy
+                        return nx >= 0 && ny >= 0 && nx < width && ny < height && inside[ny * width + nx]
+                    }
+                    if touches { value = Double(alpha[index]) / 128 }
+                }
+                // Noir : seule l'opacité compte pour une image gabarit (comme pour les formules).
+                data[index * 4] = 0
+                data[index * 4 + 1] = 0
+                data[index * 4 + 2] = 0
+                data[index * 4 + 3] = UInt8(min(value, 1) * 255)
+            }
+        }
+        return context.makeImage()
     }
 }
 

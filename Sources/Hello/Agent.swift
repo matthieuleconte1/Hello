@@ -149,6 +149,13 @@ enum Hermes {
     }
 
 
+    /// Ce que Hello affiche des réponses (voir MarkdownText) : l'IA peut écrire des tableaux et des formules.
+    static let formatting = """
+        Answers are rendered as Markdown: headings, lists, task lists, code blocks, GFM pipe tables (use them to \
+        compare things), and LaTeX math — inline with $…$, display on its own lines with $$…$$ (fractions, roots, \
+        sums, integrals, matrices, cases and aligned environments are supported).
+        """
+
     /// Phase 1 : classement sans outils (rapide, ne peut rien faire lui-même).
     static func routerPrompt(for request: String, context: MacContext) -> String {
         let forms: String
@@ -161,7 +168,7 @@ enum Hermes {
             forms = """
             Decide the level of effort needed and reply with exactly one of these forms and nothing else:
             ANSWER: <short answer in the user's language> — level 1, fast: a short answer you are sure of is enough \
-            (fact, definition, conversion, which command to use).
+            (fact, definition, conversion, which command to use, a formula). \(Self.formatting)
             WORK: <the request rewritten as a precise, self-contained instruction in the user's language> — level 2, \
             research and action: needs up-to-date information, web search, comparing sources or a thoughtful \
             explanation, or any action on this Mac (open, launch or control apps, change a setting, find, open or \
@@ -191,7 +198,8 @@ enum Hermes {
 
         You can both research and act.
         For a question: research it carefully (use the web when useful) and answer in the user's language, structured \
-        and concise, with short sections or bullet points when it helps, and cite sources as markdown links.
+        and concise, with short sections or bullet points when it helps, and cite sources as markdown links. \
+        \(Self.formatting)
         For an action: do it now on this Mac, with as few tool calls as possible. Ways to act, in order of preference:
         1. Shell: `open` (apps, files, URLs; `open -a "App"`, `open -R` reveals in Finder), `mdfind` (Spotlight) to \
         find files, `shortcuts list` / `shortcuts run "Name"`, `defaults`, `pmset`, `networksetup`, `pbcopy` / `pbpaste`.

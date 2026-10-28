@@ -79,6 +79,11 @@ enum ItemIcon {
     case symbol(String, Color)
     case color(NSColor)
     case image(URL)
+
+    /// Version ASCII de l'icône pour le fondu des grilles (Glyphe) : seulement les icônes d'apps.
+    var asciiSource: AsciiArt.Source? {
+        if case .file(let path) = self { .app(path) } else { nil }
+    }
 }
 
 enum Preview {
@@ -171,7 +176,12 @@ final class LauncherModel: ObservableObject {
     /// Seule la translation de la bande observe ce geste, pas le panneau ni les cases.
     let pager = PagerState()
     private var swipe: AppSwipe?
+    /// Filet de sécurité du geste : sa fin peut ne jamais arriver (doigts relâchés hors du panneau, geste repris par
+    /// le système), et la page resterait figée à mi-chemin, le geste suivant repartant de là.
+    private var swipeWatchdog: DispatchWorkItem?
     private var lastWheelPage = Date.distantPast
+    /// Change à chaque remise à zéro : la liste remonte en haut (même si la sélection, déjà sur la 1re ligne, ne bouge pas).
+    @Published private(set) var resetCount = 0
 
     var gridColumns: Int { AppSettings.shared.panelSize.gridColumns }
     /// Cadre du panneau dans la fenêtre (coordonnées SwiftUI). Égal à la fenêtre, sauf pendant
@@ -210,7 +220,8 @@ final class LauncherModel: ObservableObject {
         escapeConfirmation.reset()
         mode = newMode
         appsRevealed = true
-        swipe = nil
+        endSwipe()
+        resetCount += 1
         pager.rootSwipe = 0
         pager.reset()
         appPage = 0
@@ -255,7 +266,7 @@ final class LauncherModel: ObservableObject {
             appPage = 0
             pager.reset()
             appPageRange = 0...1
-            swipe = nil
+            endSwipe()
             c.morphPanel(toApps: true)
             appsRevealed = !(Motion.enabled && presented)
         }
@@ -336,7 +347,7 @@ final class LauncherModel: ObservableObject {
         let leavingApps = mode == .apps
         if leavingApps {
             appsRevealed = false
-            swipe = nil
+            endSwipe()
             releaseVelocity = 0
             pager.reset()
         }
@@ -1151,6 +1162,28 @@ final class LauncherModel: ObservableObject {
         event.phase.contains(.ended) || event.phase.contains(.cancelled)
     }
 
+    private func endSwipe() {
+        swipe = nil
+        swipeWatchdog?.cancel()
+        swipeWatchdog = nil
+    }
+
+    /// Relancé à chaque mouvement : sans nouvelle du geste pendant 0,6 s, il est tenu pour abandonné et tout se repose.
+    private func watchSwipe() {
+        swipeWatchdog?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.swipe != nil else { return }
+            self.endSwipe()
+            self.releaseVelocity = 0
+            withAnimation(Motion.scaled(self.pageSpring)) {
+                if self.mode == .apps { self.pager.settle(page: self.appPage) }
+                self.pager.rootSwipe = 0
+            }
+        }
+        swipeWatchdog = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: item)
+    }
+
     private func handleRootScroll(_ event: NSEvent) -> Bool {
         // Seuls les balayages horizontaux du trackpad comptent : le défilement vertical de la liste passe.
         guard event.hasPreciseScrollingDeltas, !event.phase.isEmpty, event.momentumPhase.isEmpty else { return false }
@@ -1158,7 +1191,7 @@ final class LauncherModel: ObservableObject {
 
         if isEnd(event) {
             let current = swipe
-            swipe = nil
+            endSwipe()
             guard current?.horizontal == true else { return false }
             let fast = (current?.velocity ?? 0) < -700
             if event.phase.contains(.ended), current?.armed == true || fast {
@@ -1181,6 +1214,7 @@ final class LauncherModel: ObservableObject {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { pager.rootSwipe = max(0, -current.offset / threshold) }
+        watchSwipe()
         return true
     }
 
@@ -1203,7 +1237,7 @@ final class LauncherModel: ObservableObject {
 
         if isEnd(event) {
             let current = swipe ?? AppSwipe()
-            swipe = nil
+            endSwipe()
             let fast = abs(current.velocity) > 600 && (current.velocity < 0) == (current.offset < 0)
             let target = appPage + (current.offset < 0 ? 1 : -1)
             let ended = event.phase.contains(.ended)
@@ -1245,6 +1279,7 @@ final class LauncherModel: ObservableObject {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { pager.drag(shown, page: appPage, width: width) }
+        watchSwipe()
         return true
     }
 
@@ -1266,7 +1301,7 @@ final class LauncherModel: ObservableObject {
         guard !batches.isEmpty else { return }
         // Seules les pages affichées sont redessinées : une page hors de l'écran trouvera ses icônes en cache
         // quand elle sera construite (sinon chaque lot redessinait tout le panneau, y compris en plein agrandissement).
-        IconCache.preload(batches) { [weak self] page in
+        IconCache.preload(batches, ascii: Motion.decodes) { [weak self] page in
             guard let self, mode == .apps, appPageRange.contains(page) else { return }
             iconsLoaded += 1
         }

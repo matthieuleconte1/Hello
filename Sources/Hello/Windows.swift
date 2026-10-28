@@ -930,6 +930,7 @@ private struct AppearanceSettings: View {
     /// Réglages propres au style Atelier Glyphe.
     @ViewBuilder private var glyphSections: some View {
         let night = settings.glyphEffectiveAppearance == .night
+        let nightOff = !night && !settings.glyphAutoNight && settings.glyphAppearance != .night
         Section {
             SwatchRow(items: GlyphAccent.allCases.map { ($0.id, $0.title, [$0.swatch]) },
                       selected: settings.glyphAccent.id) { id in
@@ -964,9 +965,38 @@ private struct AppearanceSettings: View {
                         .frame(width: 44, alignment: .trailing)
                 }
             }
-            .disabled(!night && !settings.glyphAutoNight && settings.glyphAppearance != .night)
+            .disabled(nightOff)
+            Toggle("Contour des icônes", isOn: $settings.glyphNightOutline)
+                .disabled(nightOff)
+            Toggle("Traits intérieurs, détourés automatiquement", isOn: $settings.glyphNightEdges)
+                .disabled(nightOff || !settings.glyphNightOutline)
+            LabeledContent("Détail des traits") {
+                HStack {
+                    Slider(value: $settings.glyphNightEdgeDetail, in: 0...1, step: 0.1) { EmptyView() }
+                        minimumValueLabel: { Image(systemName: "scribble") }
+                        maximumValueLabel: { Image(systemName: "scribble.variable") }
+                    Text("\(Int((settings.glyphNightEdgeDetail * 100).rounded())) %").monospacedDigit().foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+            .disabled(nightOff || !settings.glyphNightOutline || !settings.glyphNightEdges)
+            LabeledContent("Opacité des icônes") {
+                HStack {
+                    // Au trait, l'icône reste lisible sans sa couleur : on peut descendre jusqu'au dessin seul.
+                    Slider(value: $settings.glyphNightIconOpacity, in: (settings.glyphNightOutline ? 0 : 0.1)...1) { EmptyView() }
+                        minimumValueLabel: { Image(systemName: "app.dashed") }
+                        maximumValueLabel: { Image(systemName: "app.fill") }
+                    Text("\(Int((settings.glyphNightIconOpacity * 100).rounded())) %").monospacedDigit().foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
+                }
+            }
+            .disabled(nightOff)
+            Toggle("Garder les couleurs des icônes", isOn: $settings.glyphNightIconColors)
+                .disabled(nightOff)
         } header: { Text("Nuit") } footer: {
-            Text("Rouge sur noir. Rempli : sélectionné. Au trait : disponible. Horaire vérifié à chaque ouverture.")
+            Text("Rouge sur noir. La ligne choisie est cernée, ce qu'elle contient se remplit. Les icônes d'apps sont "
+                 + "dessinées au trait (contours détectés par Core Image) sur leur couleur atténuée, et reprennent leur "
+                 + "pleine couleur une fois choisies. Horaire vérifié à chaque ouverture.")
         }
     }
 

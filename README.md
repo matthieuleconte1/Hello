@@ -39,6 +39,8 @@ Tu appuies sur **⌘ Espace**, tu tapes deux lettres, c'est ouvert. Hello appren
 
 `↑↓` naviguer · `↵` action · `⌘↵` / `⌥↵` actions secondaires · `⇧↵` copier · `esc` retour
 
+Les réponses de l’IA s’affichent en Markdown, avec tableaux et formules LaTeX (`$…$`, `$$…$$`, matrices, `cases`, `aligned`), composées nativement sans dépendance.
+
 Dans une conversation IA, deux pressions distinctes sur **Échap** en moins de 2,5 secondes arrêtent la réponse en cours ou reviennent à la recherche si elle est terminée. Une saisie en cours est d’abord effacée. **⌘W** masque Hello et laisse l’IA travailler.
 
 ## Six peaux
@@ -53,7 +55,7 @@ Le même lanceur, six directions artistiques complètes. Chacune a ses couleurs,
 |---|---|---|
 | **Verre** | Liquid Glass (ou verre dépoli), teintes réglables | un reflet multicolore fait le tour du bord |
 | **Atelier Expressif** | Material 3 Expressive : barre de recherche en pilule, listes segmentées, formes qui se transforment, Google Sans Flex, six thèmes de couleurs | le panneau se déploie depuis la recherche, un anneau de focus s'y dessine |
-| **Atelier Glyphe** | noir chaud et un seul accent (six au choix), panneau en retrait dans un cadre noir, sélection inversée, libellés en chasse fixe, logo en points ; une Nuit tout en rouge et au trait, automatique aux heures choisies | une onde de points part du logo, textes et icônes se décodent en ASCII (et, plus brièvement, en tapant et à chaque sélection) |
+| **Atelier Glyphe** | noir chaud et un seul accent (six au choix), panneau en retrait dans un cadre noir, sélection inversée, libellés en chasse fixe, logo en points ; une Nuit tout en rouge et au trait (sélection cernée, icônes d'apps dessinées à l'encre), automatique aux heures choisies | une onde de points part du logo, textes et icônes se décodent en ASCII (et, plus brièvement, en tapant et à chaque sélection) |
 | **Phosphore** | écran cathodique en chasse fixe, vert, ambre, blanc ou cyan | allumage du tube, balayage, résultats affichés ligne par ligne |
 | **Papier** | papier crème, ivoire ou nuit, titres à empattements | la page se déplie, un trait d'encre se trace sous la recherche |
 | **Néo-brutal** | contours noirs, ombres pleines, couleurs franches | le panneau tombe et rebondit sur son ombre |
@@ -111,6 +113,8 @@ Environ 10 000 lignes de Swift, sans dépendance, dans un Swift Package (pas de 
 | `Shell.swift`, `Terminal.swift` | commandes shell, pseudo-terminal, dossiers, ports, processus |
 | `Clipboard.swift`, `Glyphs.swift`, `Colors.swift` | presse-papiers, emoji, pipette et barre des menus |
 | `Uninstaller.swift`, `Agent.swift` | désinstallation propre, agent IA |
+| `Markdown.swift`, `Math.swift` | réponses de l'IA : Markdown, tableaux, composition des formules LaTeX |
+| `IconTrace.swift` | icônes au trait de la Nuit (différence de flous gaussiens, XDoG) |
 
 L'icône et la bannière sont dessinées par du code : `swift Scripts/make-icon.swift` et `swift Scripts/make-banner.swift`.
 
