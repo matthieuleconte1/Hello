@@ -50,6 +50,11 @@ struct CyanotypeDecor {
     var accent: Color
     /// Halo optique autour des silhouettes et de la sélection.
     var glow: Color
+    /// Lumière surexposée de la sélection (teinte et intensité maximale au centre-gauche).
+    var selectionWash: Color
+    var selectionWashOpacity: Double
+    /// Grain du papier visible à travers la zone surexposée.
+    var selectionGrain: Color
     /// Tirage sombre (Atkins, Nuit) ou clair (Délavé).
     var dark: Bool
     /// Marge papier sombre (Nuit) ou claire (Atkins, Délavé).
@@ -76,7 +81,9 @@ enum CyanotypeLook {
         let frame, paperInk: Color
         let pane, paneDeep, paneLight, edgePool: Color
         let ink, accent, glow: Color
-        let selectionFill: Color
+        let selectionWash: Color
+        let selectionWashOpacity: Double
+        let selectionGrain: Color
         let keyFill, keyBorder, primaryKeyFill, primaryKeyInk: Color
         let toast, live, launchVeil: Color
         let herbariumColor: Color
@@ -93,11 +100,12 @@ enum CyanotypeLook {
                 pane: Color(hex: "#A8C4DC"), paneDeep: Color(hex: "#8AAEC9"),
                 paneLight: Color(hex: "#C5D9EA"), edgePool: Color(hex: "#678EB0"),
                 ink: Color(hex: "#0C2442"), accent: Color(hex: "#1E4F82"), glow: Color(hex: "#FFFFFF"),
-                selectionFill: Color(hex: "#F2F7FB").opacity(0.76),
+                selectionWash: Color(hex: "#FCFBF7"), selectionWashOpacity: 0.78,
+                selectionGrain: Color(hex: "#6789A6").opacity(0.28),
                 keyFill: Color(hex: "#E5EDF4"), keyBorder: Color(hex: "#163558").opacity(0.22),
                 primaryKeyFill: Color(hex: "#235485"), primaryKeyInk: Color(hex: "#F7FAFD"),
                 toast: Color(hex: "#1C4F82"), live: Color(hex: "#1A528B"), launchVeil: Color(hex: "#FFFFFF"),
-                herbariumColor: Color(hex: "#FFFFFF"), herbariumOpacity: 0.56,
+                herbariumColor: Color(hex: "#FFFFFF"), herbariumOpacity: 0.42,
                 dark: false, chromeDark: false
             )
         case .night:
@@ -106,12 +114,13 @@ enum CyanotypeLook {
                 frame: Color(hex: "#0E1B2F"), paperInk: Color(hex: "#9BB5D2"),
                 pane: Color(hex: "#051021"), paneDeep: Color(hex: "#020914"),
                 paneLight: Color(hex: "#0F2547"), edgePool: Color(hex: "#1B3F6E"),
-                ink: Color(hex: "#C8DBEE"), accent: Color(hex: "#84BCE2"), glow: Color(hex: "#7FB9E2"),
-                selectionFill: Color(hex: "#7BB5DE").opacity(0.20),
+                ink: Color(hex: "#C8DBEE"), accent: Color(hex: "#84BCE2"), glow: Color(hex: "#A8D4F5"),
+                selectionWash: Color(hex: "#8AC4EC"), selectionWashOpacity: 0.34,
+                selectionGrain: Color(hex: "#030D1C").opacity(0.42),
                 keyFill: Color(hex: "#152742"), keyBorder: Color(hex: "#7FA6CE").opacity(0.22),
                 primaryKeyFill: Color(hex: "#1E497A"), primaryKeyInk: Color(hex: "#DFECF9"),
                 toast: Color(hex: "#7EB9E0"), live: Color(hex: "#7EB9E0"), launchVeil: Color(hex: "#8EC3E8"),
-                herbariumColor: Color(hex: "#A9CEEB"), herbariumOpacity: 0.145,
+                herbariumColor: Color(hex: "#A9CEEB"), herbariumOpacity: 0.12,
                 dark: true, chromeDark: true
             )
         default:
@@ -120,12 +129,13 @@ enum CyanotypeLook {
                 frame: Color(hex: "#F2ECE0"), paperInk: Color(hex: "#112D54"),
                 pane: Color(hex: "#0F3467"), paneDeep: Color(hex: "#09234B"),
                 paneLight: Color(hex: "#1C4D8C"), edgePool: Color(hex: "#071E40"),
-                ink: Color(hex: "#F2F7FD"), accent: Color(hex: "#B5DCF7"), glow: Color(hex: "#D0EBFF"),
-                selectionFill: Color(hex: "#D2EBFF").opacity(0.22),
+                ink: Color(hex: "#F2F7FD"), accent: Color(hex: "#B5DCF7"), glow: Color(hex: "#E4F4FF"),
+                selectionWash: Color(hex: "#D6EEFF"), selectionWashOpacity: 0.35,
+                selectionGrain: Color(hex: "#082046").opacity(0.36),
                 keyFill: Color(hex: "#E6DEC9"), keyBorder: Color(hex: "#112D54").opacity(0.22),
                 primaryKeyFill: Color(hex: "#11376B"), primaryKeyInk: Color(hex: "#F4EFE5"),
                 toast: Color(hex: "#13417E"), live: Color(hex: "#8ED2FA"), launchVeil: Color(hex: "#DEF1FF"),
-                herbariumColor: Color(hex: "#EAF5FF"), herbariumOpacity: 0.16,
+                herbariumColor: Color(hex: "#EAF5FF"), herbariumOpacity: 0.135,
                 dark: true, chromeDark: false
             )
         }
@@ -149,8 +159,8 @@ enum CyanotypeLook {
         let iconSpec: StyleTokens.IconPhotogram? = photogram
             ? StyleTokens.IconPhotogram(
                 dark: p.dark,
-                tint: p.dark ? Color(hex: resolved == .night ? "#82AFD4" : "#9ECFF2") : Color(hex: "#2B6096"),
-                highlight: p.dark ? Color(hex: resolved == .night ? "#D4E8FA" : "#F4FAFF") : Color(hex: "#174375"),
+                tint: p.dark ? Color(hex: resolved == .night ? "#B0D5F2" : "#CBE9FF") : Color(hex: "#16467A"),
+                highlight: p.dark ? Color(hex: resolved == .night ? "#E8F4FF" : "#FFFFFF") : Color(hex: "#0C315A"),
                 glow: p.glow
             )
             : nil
@@ -159,7 +169,8 @@ enum CyanotypeLook {
             surface: .inset(frame: p.frame, pane: p.pane),
             dark: p.dark, ink: p.ink, chromeInk: p.paperInk, chromeDark: p.chromeDark,
             accent: p.accent, accent2: p.glow, live: p.live, toast: p.toast,
-            selectionFill: p.selectionFill,
+            // La sélection est entièrement rendue par `CyanotypeSelection` (lavis surexposé fondu dans le grain).
+            selectionFill: .clear,
             rowRadius: 7, cellRadius: 11, radius: 15,
             border: (p.paperInk.opacity(p.chromeDark ? 0.16 : 0.14), 1),
             // Pas de filet rectiligne sur la marge papier : le bord passé au pinceau fait la séparation.
@@ -168,19 +179,25 @@ enum CyanotypeLook {
             header: .handwritten,
             markSkin: .cyanotype(ink: markDisc, accent: markGlow),
             displayFamily: "Baskerville",
-            paneBorder: nil, strongMeta: true,
+            paneBorder: nil,
+            iconButton: (fill: p.primaryKeyFill, ink: p.primaryKeyInk),
+            strongMeta: true,
             keyFill: p.keyFill, keyInk: p.paperInk.opacity(0.82), keyBorder: p.keyBorder,
             primaryKeyFill: p.primaryKeyFill, primaryKeyInk: p.primaryKeyInk,
             launchTint: p.launchVeil,
             tile: .decor,
             iconSaturation: photogram ? 1.0 : 0.82,
-            iconOpacity: photogram ? (p.dark ? 0.88 : 0.90) : 0.92,
+            iconOpacity: photogram ? (p.dark ? 0.98 : 0.96) : 0.92,
+            iconOutline: photogram,
+            iconEdges: photogram ? 0.35 : nil,
             motion: .timingCurve(0.25, 0.85, 0.3, 1, duration: 0.22),
             iconPhotogram: iconSpec,
             decor: .cyanotype(CyanotypeDecor(
                 frame: p.frame, paperInk: p.paperInk,
                 pane: p.pane, paneDeep: p.paneDeep, paneLight: p.paneLight, edgePool: p.edgePool,
                 ink: p.ink, accent: p.accent, glow: p.glow,
+                selectionWash: p.selectionWash, selectionWashOpacity: p.selectionWashOpacity,
+                selectionGrain: p.selectionGrain,
                 dark: p.dark, chromeDark: p.chromeDark, herbarium: settings.cyanotypeHerbarium,
                 herbariumColor: p.herbariumColor, herbariumOpacity: p.herbariumOpacity,
                 grainDark: p.chromeDark ? Color.black.opacity(0.24) : Color(hex: "#574B36").opacity(0.105),
@@ -385,6 +402,11 @@ enum CyanotypePaper {
     /// Planche d'herbier en photogramme blanc translucide (1280 × 640 px @2x) :
     /// grande fronde de fougère à droite, algue *Dictyota dichotoma* en haut à droite, ombelle discrète en bas à gauche.
     static let herbarium: NSImage = makeHerbarium()
+
+    /// Zone surexposée de sélection (ligne et case) : lumière inégale plus dense au centre-gauche,
+    /// s'éteignant vers la droite et fondue dans le grain du papier sans aucun contour géométrique.
+    static let selectionWashRow: NSImage = makeSelectionWash(wide: true)
+    static let selectionWashCell: NSImage = makeSelectionWash(wide: false)
 
     static func tiled(_ image: NSImage, color: Color) -> some View {
         Rectangle()
@@ -605,6 +627,88 @@ enum CyanotypePaper {
         }
         guard let cg = ctx.makeImage() else { return NSImage(size: NSSize(width: w / 2, height: h / 2)) }
         return NSImage(cgImage: cg, size: NSSize(width: w / 2, height: h / 2))
+    }
+
+    /// Masque organique d'une zone surexposée de tirage : sans filet ni forme géométrique, bords dévorés par le grain
+    /// du papier aquarelle, densité lumineuse inégale (plus présente au centre-gauche, s'éteignant vers la droite).
+    private static func makeSelectionWash(wide: Bool) -> NSImage {
+        let w = wide ? 640 : 180
+        let h = wide ? 104 : 180
+        guard let ctx = bitmapContext(width: w, height: h),
+              let data = ctx.data?.assumingMemoryBound(to: UInt8.self) else {
+            return NSImage(size: NSSize(width: w / 2, height: h / 2))
+        }
+
+        func smoothstep(_ edge0: Double, _ edge1: Double, _ x: Double) -> Double {
+            let t = min(max((x - edge0) / (edge1 - edge0), 0.0), 1.0)
+            return t * t * (3.0 - 2.0 * t)
+        }
+
+        for y in 0..<h {
+            let ny = Double(y) / Double(h - 1)
+            let leftJitter = (fbm1D(ny * 5.0, seed: 601) - 0.5) * 0.024
+            let rightJitter = (fbm1D(ny * 4.5, seed: 617) - 0.5) * 0.085
+            for x in 0..<w {
+                let nx = Double(x) / Double(w - 1)
+
+                // Grain pressé à froid (alvéoles + micro-grain + fibres) pour fondre les bords et habiter la lumière.
+                let coarse = tiledValueNoise(Double(x) / 14.0, Double(y) / 14.0, periodX: 48, periodY: 16, seed: 631)
+                let medium = tiledValueNoise(Double(x) / 4.8, Double(y) / 4.8, periodX: 136, periodY: 32, seed: 647)
+                let fine = hash(x, y, 661)
+                let fiber = tiledValueNoise(Double(x) / 22.0, Double(y) / 2.6, periodX: 32, periodY: 48, seed: 677)
+                let tooth = coarse * 0.40 + medium * 0.30 + fine * 0.16 + fiber * 0.14
+
+                // Nuages lents de lumière inégale (exposition au soleil à travers le papier).
+                let cloud1 = tiledValueNoise(nx * (wide ? 5.5 : 3.0), ny * (wide ? 2.2 : 3.0), periodX: 8, periodY: 4, seed: 701)
+                let cloud2 = tiledValueNoise(nx * (wide ? 13.0 : 6.0), ny * (wide ? 4.5 : 6.0), periodX: 16, periodY: 8, seed: 719)
+                let unevenLight = 0.74 + (cloud1 * 0.65 + cloud2 * 0.35) * 0.42
+
+                let envelope: Double
+                if wide {
+                    // Ondulation douce des lisières haute et basse pour effacer toute impression de barre rectiligne.
+                    let topWave = (fbm1D(nx * 5.2, seed: 503) - 0.5) * 0.16
+                    let botWave = (fbm1D(nx * 5.8, seed: 521) - 0.5) * 0.16
+                    let dy = abs(ny - 0.5) * 2.0
+                    let dyEff = dy + (ny < 0.5 ? topWave : botWave)
+                    // Cœur vertical généreux (enveloppe icône, titre et sous-titre), puis fondu doux jusqu'à 0 aux bords.
+                    let vEnv = smoothstep(1.0, 0.50, dyEff)
+
+                    // Profil horizontal asymétrique : enveloppe tôt l'icône à gauche, culmine au centre-gauche
+                    // sous le titre, puis s'éteint progressivement et irrégulièrement vers la droite.
+                    let leftIn = smoothstep(0.0, 0.048, nx + leftJitter)
+                    let centerBoost = 1.0 + 0.16 * exp(-pow((nx - 0.24) / 0.22, 2))
+                    let rightDecay = pow(smoothstep(0.99 + rightJitter, 0.26, nx), 1.15)
+                    let hEnv = leftIn * min(1.0, (0.06 + 0.94 * rightDecay) * centerBoost) * smoothstep(1.0, 0.92, nx)
+                    envelope = vEnv * hEnv
+                } else {
+                    // Case carrée (grille d'apps / emoji) : halo organique légèrement décalé en haut à gauche.
+                    let dx = (nx - 0.46) * 2.0
+                    let dy = (ny - 0.46) * 2.0
+                    let angle = atan2(dy, dx)
+                    let radialWave = (fbm1D((angle + .pi) * 1.4, seed: 547) - 0.5) * 0.16
+                    let dist = sqrt(dx * dx + dy * dy) + radialWave
+                    envelope = smoothstep(0.98, 0.38, dist)
+                }
+
+                // Érosion des bords par le grain du papier : la surexposition s'éteint dans les fibres, jamais au cordeau.
+                let edgeZone = 1.0 - envelope
+                let eroded = max(0.0, envelope - (1.0 - tooth) * 0.36 * edgeZone)
+                // Texture du papier perceptible jusque dans le cœur de la lumière.
+                let textured = eroded * unevenLight * (0.68 + 0.44 * tooth)
+                let alpha = min(1.0, max(0.0, textured))
+
+                let a = UInt8(min(max(alpha * 255.0, 0), 255))
+                let idx = (y * w + x) * 4
+                data[idx] = a
+                data[idx + 1] = a
+                data[idx + 2] = a
+                data[idx + 3] = a
+            }
+        }
+        guard let cg = ctx.makeImage() else { return NSImage(size: NSSize(width: w / 2, height: h / 2)) }
+        let image = NSImage(cgImage: cg, size: NSSize(width: w / 2, height: h / 2))
+        image.isTemplate = true
+        return image
     }
 
     // MARK: Herbier botanique (photogrammes en CoreGraphics)
@@ -950,7 +1054,7 @@ struct CyanotypePane: View {
                 CyanotypePaper.tiled(CyanotypePaper.grainLight,
                                      color: decor.glow.opacity(decor.dark ? 0.065 : 0.24))
 
-                // Version végétale : silhouettes botaniques en filigrane très discret.
+                // Version végétale : silhouettes botaniques en filigrane discret, adoucies derrière les accessoires à droite.
                 if decor.herbarium {
                     Image(nsImage: CyanotypePaper.herbarium)
                         .renderingMode(.template)
@@ -960,6 +1064,18 @@ struct CyanotypePane: View {
                         .clipped()
                         .foregroundStyle(decor.herbariumColor)
                         .opacity(decor.herbariumOpacity)
+                        .mask {
+                            RadialGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.42), location: 0),
+                                    .init(color: .white.opacity(0.68), location: 0.52),
+                                    .init(color: .white, location: 1.0),
+                                ],
+                                center: UnitPoint(x: 0.90, y: 0.38),
+                                startRadius: 10,
+                                endRadius: max(w * 0.25, h * 0.46)
+                            )
+                        }
                 }
 
                 // Léger bourrelet de pigment accumulé juste au bord du coup de pinceau.
@@ -1015,38 +1131,36 @@ struct CyanotypePane: View {
     }
 }
 
-/// Sélection : zone « surexposée » laiteuse et douce (comme une bandelette de papier calque posée sur le tirage
-/// d'Atkins), aux bords fondus dans le grain du papier — sans filet rigide ni crochet technique.
+/// Sélection : vraie zone surexposée de tirage — lumière inégale plus dense au centre-gauche et s'éteignant vers
+/// la droite, bords fondus dans les fibres du papier aquarelle (aucun filet, aucun contour géométrique) et grain
+/// perceptible à travers la lumière.
 struct CyanotypeSelection: View {
     let decor: CyanotypeDecor
     let radius: CGFloat
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        ZStack {
-            // Doux dégradé laiteux, un rien plus lumineux au centre de la bandelette.
-            shape.fill(
-                LinearGradient(
-                    colors: [
-                        decor.glow.opacity(decor.dark ? 0.09 : 0.22),
-                        decor.glow.opacity(decor.dark ? 0.17 : 0.36),
-                        decor.glow.opacity(decor.dark ? 0.07 : 0.16),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            // Le grain du papier se prolonge dans la zone surexposée.
-            CyanotypePaper.tiled(CyanotypePaper.grainLight, color: decor.glow.opacity(decor.dark ? 0.07 : 0.22))
-                .clipShape(shape)
-            // Halo de bord diffus, comme la lumière qui déborde sous une bandelette de calque.
-            shape.strokeBorder(
-                decor.dark ? decor.glow.opacity(0.32) : Color.white.opacity(0.65),
-                lineWidth: 1.5
-            )
-            .blur(radius: 1.2)
+        GeometryReader { geo in
+            let wide = geo.size.width > geo.size.height * 2.2
+            let wash = wide ? CyanotypePaper.selectionWashRow : CyanotypePaper.selectionWashCell
+            let bleedY = wide ? min(4.5, geo.size.height * 0.10) : min(3.0, geo.size.height * 0.06)
+            let bleedX = wide ? min(5.0, geo.size.width * 0.012) : bleedY
+            ZStack {
+                // Voile surexposé principal : masque organique à bords fondus dans le grain.
+                Image(nsImage: wash)
+                    .renderingMode(.template)
+                    .resizable()
+                    .foregroundStyle(decor.selectionWash)
+                    .opacity(decor.selectionWashOpacity)
+                // Grain du papier aquarelle visible à travers la zone éclaircie.
+                CyanotypePaper.tiled(CyanotypePaper.grainDark, color: decor.selectionGrain)
+                    .mask {
+                        Image(nsImage: wash)
+                            .resizable()
+                    }
+            }
+            .padding(.horizontal, -bleedX)
+            .padding(.vertical, -bleedY)
         }
-        .shadow(color: decor.glow.opacity(decor.dark ? 0.24 : 0.38), radius: 5.5)
         .allowsHitTesting(false)
     }
 }
