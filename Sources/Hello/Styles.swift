@@ -224,6 +224,8 @@ struct StyleTokens {
     var displayFamily: String?
     /// Filet d'un pixel autour du panneau intérieur (`.inset`).
     var paneBorder: Color?
+    /// Rayon du panneau intérieur ; nil : rayon du cadre moins sa marge (8 pt minimum).
+    var paneRadius: CGFloat?
 
     /// Barre de recherche en pilule posée dans l'en-tête (Material) : elle prend les couleurs du contenu.
     var searchBar: Color?
@@ -690,10 +692,11 @@ extension View {
     @ViewBuilder
     func styledPane(_ style: StyleTokens, panelRadius: CGFloat) -> some View {
         if case .inset(_, let pane) = style.surface {
-            let shape = RoundedRectangle(cornerRadius: max(panelRadius - 8, 8), style: .continuous)
+            let radius = style.paneRadius ?? max(panelRadius - 8, 8)
+            let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             background {
                 shape.fill(pane)
-                    .overlay { DecorPane(decor: style.decor, radius: max(panelRadius - 8, 8)) }
+                    .overlay { DecorPane(decor: style.decor, radius: radius) }
             }
                 .clipShape(shape)
                 .overlay {
@@ -749,8 +752,14 @@ enum VariableFont {
             missing.insert(family)
             return nil
         }
-        let axes: [NSNumber: CGFloat] = [tag("wght"): weight, tag("wdth"): width, tag("opsz"): min(max(size, 6), 144)]
-        let font = NSFont(descriptor: base.fontDescriptor.addingAttributes([.variation: axes]), size: size) ?? base
+        let font: NSFont
+        if let variations = CTFontCopyVariationAxes(base as CTFont) as? [Any], !variations.isEmpty {
+            let axes: [NSNumber: CGFloat] = [tag("wght"): weight, tag("wdth"): width, tag("opsz"): min(max(size, 6), 144)]
+            font = NSFont(descriptor: base.fontDescriptor.addingAttributes([.variation: axes]), size: size) ?? base
+        } else {
+            // Police statique (Helvetica Neue, Avenir Next, Optima…) : on choisit la vraie graisse de la famille.
+            font = NSFontManager.shared.font(withFamily: family, traits: [], weight: managerWeight(weight), size: size) ?? base
+        }
         cache[key] = font
         return font
     }
@@ -766,6 +775,20 @@ enum VariableFont {
         case .heavy: 800
         case .black: 900
         default: 400
+        }
+    }
+
+    /// Échelle NSFontManager (0–15, 5 = Regular, 9 = Bold) depuis une graisse CSS.
+    private static func managerWeight(_ weight: CGFloat) -> Int {
+        switch weight {
+        case ..<250: 3
+        case ..<350: 4
+        case ..<450: 5
+        case ..<550: 6
+        case ..<650: 8
+        case ..<750: 9
+        case ..<850: 10
+        default: 11
         }
     }
 
@@ -880,10 +903,20 @@ extension View {
         } else if let tint = style.iconTint {
             grayscale(1).colorMultiply(tint)
         } else if style.iconSaturation < 1 {
-            saturation(style.iconSaturation)
+            modifier(DesaturatedIcon(saturation: style.iconSaturation))
         } else {
             self
         }
+    }
+}
+
+/// Icône désaturée au repos ; la ligne choisie retrouve ses couleurs.
+private struct DesaturatedIcon: ViewModifier {
+    let saturation: Double
+    @Environment(\.rowSelected) private var selected
+
+    func body(content: Content) -> some View {
+        content.saturation(selected ? 1 : saturation)
     }
 }
 

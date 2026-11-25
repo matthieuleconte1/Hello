@@ -92,6 +92,11 @@ Le même lanceur, huit directions artistiques complètes. Chacune a ses couleurs
 | **Néo-brutal** | contours noirs, ombres pleines, couleurs franches | le panneau tombe et rebondit sur son ombre |
 | **Cyanotype** | un tirage au ferroprussiate à la Anna Atkins : papier chiffon, bleu de Prusse étalé au pinceau aux bords frangés, herbier en photogramme (fougère, ombelle, algue), titres manuscrits, icônes d'apps en photogramme ; Atkins, Délavé ou Nuit, et un aplat contrasté (couleurs unies, sans grain ni halo, sélection pleine) | le voile ferreux s'oxyde en bleu puis se rince et révèle l'herbier |
 | **Atelier Champ** | le design system Field de Teenage Engineering : aluminium microbillé ou noir anodisé, plateau de touches blanches serti d'un joint sombre, échelles pointillées, libellés en minuscules, touches en relief, encodeurs marine, havane, pierre et orange qui tournent d'un cran ; en noir, la ligne choisie s'allume comme une touche rétroéclairée | un VU-mètre aux quatre couleurs se calibre sous la recherche |
+| **Atelier Suisse** | style typographique international et signalétique ferroviaire : grille fine, noir et blanc, un seul rouge signal, sélection en bandeau noir, libellés en capitales ; Jour ou Nuit | la trotteuse rouge fait un tour autour du logo pendant qu'une palette bascule sous la recherche |
+| **Atelier Platine** | l'apparence Platinum de Mac OS 8 et 9 : gris ciselé, biseaux d'un pixel, barre rayée, Geneva, sélection pleine aux angles vifs ; Platinum ou Graphite | trois cadres filaires « Zoom Rects » grandissent du centre vers le panneau |
+| **E-Encre** | une liseuse à encre électronique : gris minéral froid, contraste mat, sélection en vidéo inverse ; Jour ou Nuit | un bref flash d'inversion, comme un rafraîchissement complet de la dalle |
+| **Laque** | laque urushi et kintsugi : ébène satiné, porcelaine mate ou cinabre, fil d'or ; Urushi, Porcelaine ou Cinabre | un fil d'or part du centre sous la recherche, s'étend, brille puis se pose |
+| **Riso** | risographie bichrome : bleu fédéral et rose fluo en surimpression légèrement décalée, trame, papier recyclé, icônes en bichromie ; Papier brut ou Anthracite | la passe bleue puis la passe rose tramée se calent à 1,5 pt l'une de l'autre |
 
 Tout se règle dans **Réglages › Apparence** et **Réglages › Animations** : intensité et vitesse des animations, densité des lignes, taille du texte, et un **mode focus** qui n'affiche que la barre de recherche à l'ouverture.
 
@@ -144,8 +149,8 @@ Environ 15 000 lignes de Swift, sans dépendance, dans un Swift Package (pas de 
 | `Controller.swift` | la fenêtre flottante, le raccourci, l'ouverture et la fermeture |
 | `LauncherModel.swift` | les modes, la recherche, le clavier, les actions |
 | `Views.swift` | le panneau en SwiftUI : liste, grille d'apps, aperçus, terminal |
-| `Styles.swift`, `Motion.swift`, `Mark.swift` | les huit peaux, leurs animations, le logo |
-| `StyleCyanotype.swift`, `StyleField.swift` | tout ce qui est propre au Cyanotype et à Atelier Champ (jetons, décor, mouvement, réglages) |
+| `Styles.swift`, `Motion.swift`, `Mark.swift` | les peaux, leurs animations, le logo |
+| `StyleCyanotype.swift`, `StyleField.swift`, `StyleSwiss.swift`, `StylePlatinum.swift`, `StyleEInk.swift`, `StyleLacquer.swift`, `StyleRiso.swift` | tout ce qui est propre à chacune de ces peaux (jetons, décor, mouvement, réglages) |
 | `Windows.swift` | réglages façon Réglages Système et accueil |
 | `AppIndex.swift`, `Usage.swift` | index des apps, frécence et apprentissage |
 | `Shell.swift`, `Terminal.swift` | commandes shell, pseudo-terminal, dossiers, ports, processus |

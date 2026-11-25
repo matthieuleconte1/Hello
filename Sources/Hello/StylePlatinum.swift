@@ -199,6 +199,7 @@ enum PlatinumLook {
             fontFamily: "Geneva",
             displayFamily: "SF Compact",
             paneBorder: nil,
+            paneRadius: 1,
             iconButton: dark ? (Color(hex: "#4C505B"), p.darkInk) : (Color(hex: "#CCCCCC"), p.lightInk),
             strongMeta: true,
             keyFill: dark ? p.darkKeyFill : p.lightKeyFill,

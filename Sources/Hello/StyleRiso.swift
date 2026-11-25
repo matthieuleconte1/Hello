@@ -111,7 +111,8 @@ enum RisoLook {
             toast: pink,
             // La sélection est rendue par `RisoSelection` : aplat rose décalé 2 × 1,5 pt + contour bleu net.
             selectionFill: .clear,
-            selectionInk: nil,
+            // Sous-titres et accessoires à pleine encre sur l'aplat rose : lisibles, sans gris délavé.
+            selectionInk: ink,
             selectionBorder: nil,
             rowRadius: 5,
             cellRadius: 8,
