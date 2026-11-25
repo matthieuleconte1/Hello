@@ -4,7 +4,7 @@ import SwiftUI
 /// Direction artistique du panneau. « Verre » suit les réglages de verre (matériau, teinte, surlignage) ;
 /// les autres sont des styles complets : fond, typographie, sélection, touches, icônes et mouvement.
 enum PanelStyle: String, CaseIterable, Identifiable {
-    case glass, atelier, glyph, phosphor, paper, brutal, cyanotype, field
+    case glass, atelier, glyph, phosphor, paper, brutal, cyanotype, field, swiss, platinum, eink, lacquer, riso
     var id: String { rawValue }
 
     var title: String {
@@ -17,6 +17,11 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .brutal: "Néo-brutal"
         case .cyanotype: "Cyanotype"
         case .field: "Atelier Champ"
+        case .swiss: "Atelier Suisse"
+        case .platinum: "Atelier Platine"
+        case .eink: "E-Encre"
+        case .lacquer: "Laque"
+        case .riso: "Riso"
         }
     }
 
@@ -30,6 +35,11 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .brutal: "Contours noirs, ombres pleines et couleurs franches."
         case .cyanotype: CyanotypeLook.detail
         case .field: FieldLook.detail
+        case .swiss: SwissLook.detail
+        case .platinum: PlatinumLook.detail
+        case .eink: EInkLook.detail
+        case .lacquer: LacquerLook.detail
+        case .riso: RisoLook.detail
         }
     }
 
@@ -43,6 +53,11 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .brutal: "square.stack.3d.down.forward.fill"
         case .cyanotype: CyanotypeLook.symbol
         case .field: FieldLook.symbol
+        case .swiss: SwissLook.symbol
+        case .platinum: PlatinumLook.symbol
+        case .eink: EInkLook.symbol
+        case .lacquer: LacquerLook.symbol
+        case .riso: RisoLook.symbol
         }
     }
 
@@ -59,6 +74,11 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .brutal: .slam
         case .cyanotype: .plotter
         case .field: .detent
+        case .swiss: .flap
+        case .platinum: .zoomRects
+        case .eink: .refresh
+        case .lacquer: .shoji
+        case .riso: .press
         }
     }
 }
@@ -274,6 +294,11 @@ struct StyleTokens {
         case none
         case cyanotype(CyanotypeDecor)
         case field(FieldDecor)
+        case swiss(SwissDecor)
+        case platinum(PlatinumDecor)
+        case eink(EInkDecor)
+        case lacquer(LacquerDecor)
+        case riso(RisoDecor)
     }
 
     static var current: StyleTokens { AppSettings.shared.panelStyle.tokens }
@@ -391,6 +416,11 @@ struct StyleTokens {
         case .brutal: brutal(AppSettings.shared.brutalColor)
         case .cyanotype: CyanotypeLook.tokens
         case .field: FieldLook.tokens
+        case .swiss: SwissLook.tokens
+        case .platinum: PlatinumLook.tokens
+        case .eink: EInkLook.tokens
+        case .lacquer: LacquerLook.tokens
+        case .riso: RisoLook.tokens
         }
     }
 
@@ -1242,6 +1272,11 @@ struct StyleCard: View {
         case .brutal: Color(hex: "#7FD1FF")
         case .cyanotype: CyanotypeLook.backdrop
         case .field: FieldLook.backdrop
+        case .swiss: SwissLook.backdrop
+        case .platinum: PlatinumLook.backdrop
+        case .eink: EInkLook.backdrop
+        case .lacquer: LacquerLook.backdrop
+        case .riso: RisoLook.backdrop
         }
     }
 }
@@ -1291,6 +1326,11 @@ struct DecorSurface: View {
         case .none: EmptyView()
         case .cyanotype(let d): CyanotypeSurface(decor: d, radius: radius)
         case .field(let d): FieldSurface(decor: d, radius: radius)
+        case .swiss(let d): SwissSurface(decor: d, radius: radius)
+        case .platinum(let d): PlatinumSurface(decor: d, radius: radius)
+        case .eink(let d): EInkSurface(decor: d, radius: radius)
+        case .lacquer(let d): LacquerSurface(decor: d, radius: radius)
+        case .riso(let d): RisoSurface(decor: d, radius: radius)
         }
     }
 }
@@ -1305,6 +1345,11 @@ struct DecorPane: View {
         case .none: EmptyView()
         case .cyanotype(let d): CyanotypePane(decor: d, radius: radius)
         case .field(let d): FieldPane(decor: d, radius: radius)
+        case .swiss(let d): SwissPane(decor: d, radius: radius)
+        case .platinum(let d): PlatinumPane(decor: d, radius: radius)
+        case .eink(let d): EInkPane(decor: d, radius: radius)
+        case .lacquer(let d): LacquerPane(decor: d, radius: radius)
+        case .riso(let d): RisoPane(decor: d, radius: radius)
         }
     }
 }
@@ -1319,6 +1364,11 @@ struct DecorSelection: View {
         case .none: EmptyView()
         case .cyanotype(let d): CyanotypeSelection(decor: d, radius: radius)
         case .field(let d): FieldSelection(decor: d, radius: radius)
+        case .swiss(let d): SwissSelection(decor: d, radius: radius)
+        case .platinum(let d): PlatinumSelection(decor: d, radius: radius)
+        case .eink(let d): EInkSelection(decor: d, radius: radius)
+        case .lacquer(let d): LacquerSelection(decor: d, radius: radius)
+        case .riso(let d): RisoSelection(decor: d, radius: radius)
         }
     }
 }
@@ -1334,6 +1384,11 @@ struct DecorDivider: View {
         case .none: EmptyView()
         case .cyanotype(let d): CyanotypeDivider(decor: d, vertical: vertical)
         case .field(let d): FieldDivider(decor: d, role: vertical ? .plain : role)
+        case .swiss(let d): SwissDivider(decor: d, vertical: vertical, role: role)
+        case .platinum(let d): PlatinumDivider(decor: d, vertical: vertical, role: role)
+        case .eink(let d): EInkDivider(decor: d, vertical: vertical, role: role)
+        case .lacquer(let d): LacquerDivider(decor: d, vertical: vertical, role: role)
+        case .riso(let d): RisoDivider(decor: d, vertical: vertical, role: role)
         }
     }
 }
@@ -1350,6 +1405,11 @@ struct DecorTile: View {
         case .none: EmptyView()
         case .cyanotype(let d): CyanotypeTile(decor: d, name: name, tint: tint, selected: selected)
         case .field(let d): FieldTile(decor: d, name: name, tint: tint, selected: selected)
+        case .swiss(let d): SwissTile(decor: d, name: name, tint: tint, selected: selected)
+        case .platinum(let d): PlatinumTile(decor: d, name: name, tint: tint, selected: selected)
+        case .eink(let d): EInkTile(decor: d, name: name, tint: tint, selected: selected)
+        case .lacquer(let d): LacquerTile(decor: d, name: name, tint: tint, selected: selected)
+        case .riso(let d): RisoTile(decor: d, name: name, tint: tint, selected: selected)
         }
     }
 }

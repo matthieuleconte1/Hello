@@ -819,6 +819,11 @@ private struct AppearanceSettings: View {
                 }
             case .cyanotype: CyanotypeSettings()
             case .field: FieldSettings()
+            case .swiss: SwissSettings()
+            case .platinum: PlatinumSettings()
+            case .eink: EInkSettings()
+            case .lacquer: LacquerSettings()
+            case .riso: RisoSettings()
             }
 
             Section {

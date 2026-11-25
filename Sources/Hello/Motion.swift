@@ -20,6 +20,16 @@ enum RevealStyle {
     case plotter
     /// Atelier Champ : l'instrument se met sous tension, cranté comme un encodeur.
     case detent
+    /// Atelier Suisse : voir SwissLook (StyleSwiss.swift).
+    case flap
+    /// Atelier Platine : voir PlatinumLook (StylePlatinum.swift).
+    case zoomRects
+    /// E-Encre : voir EInkLook (StyleEInk.swift).
+    case refresh
+    /// Laque : voir LacquerLook (StyleLacquer.swift).
+    case shoji
+    /// Riso : voir RisoLook (StyleRiso.swift).
+    case press
 
     /// Ce qui caractérise le mouvement du style (affiché dans Réglages › Animations).
     var summary: String {
@@ -37,6 +47,11 @@ enum RevealStyle {
             + "comme un bouton qu'on presse."
         case .plotter: CyanotypeLook.summary
         case .detent: FieldLook.summary
+        case .flap: SwissLook.summary
+        case .zoomRects: PlatinumLook.summary
+        case .refresh: EInkLook.summary
+        case .shoji: LacquerLook.summary
+        case .press: RisoLook.summary
         }
     }
 
@@ -51,6 +66,11 @@ enum RevealStyle {
         case .slam: "une ombre de la couleur de sélection claque sous le panneau, puis rentre sous l'ombre noire."
         case .plotter: CyanotypeLook.effect
         case .detent: FieldLook.effect
+        case .flap: SwissLook.effect
+        case .zoomRects: PlatinumLook.effect
+        case .refresh: EInkLook.effect
+        case .shoji: LacquerLook.effect
+        case .press: RisoLook.effect
         }
     }
 
@@ -65,6 +85,11 @@ enum RevealStyle {
         case .slam: light ? .spring(response: 0.2, dampingFraction: 0.75) : .spring(response: 0.36, dampingFraction: 0.5)
         case .plotter: CyanotypeLook.open(light: light)
         case .detent: FieldLook.open(light: light)
+        case .flap: SwissLook.open(light: light)
+        case .zoomRects: PlatinumLook.open(light: light)
+        case .refresh: EInkLook.open(light: light)
+        case .shoji: LacquerLook.open(light: light)
+        case .press: RisoLook.open(light: light)
         }
     }
 
@@ -79,6 +104,11 @@ enum RevealStyle {
         case .slam: .spring(response: 0.3, dampingFraction: 0.62)
         case .plotter: CyanotypeLook.navigation
         case .detent: FieldLook.navigation
+        case .flap: SwissLook.navigation
+        case .zoomRects: PlatinumLook.navigation
+        case .refresh: EInkLook.navigation
+        case .shoji: LacquerLook.navigation
+        case .press: RisoLook.navigation
         }
     }
 
@@ -104,6 +134,16 @@ enum RevealStyle {
             return CyanotypeLook.modeTransition(forward: forward)
         case .detent:
             return FieldLook.modeTransition(forward: forward)
+        case .flap:
+            return SwissLook.modeTransition(forward: forward)
+        case .zoomRects:
+            return PlatinumLook.modeTransition(forward: forward)
+        case .refresh:
+            return EInkLook.modeTransition(forward: forward)
+        case .shoji:
+            return LacquerLook.modeTransition(forward: forward)
+        case .press:
+            return RisoLook.modeTransition(forward: forward)
         }
     }
 
@@ -121,6 +161,11 @@ enum RevealStyle {
         case .slam: .spring(response: 0.32, dampingFraction: 0.5).delay(0.14 + n * 0.03)
         case .plotter: CyanotypeLook.row(order)
         case .detent: FieldLook.row(order)
+        case .flap: SwissLook.row(order)
+        case .zoomRects: PlatinumLook.row(order)
+        case .refresh: EInkLook.row(order)
+        case .shoji: LacquerLook.row(order)
+        case .press: RisoLook.row(order)
         }
     }
 
@@ -138,6 +183,11 @@ enum RevealStyle {
         case .slam: .spring(response: 0.16, dampingFraction: 0.7)
         case .plotter: CyanotypeLook.close
         case .detent: FieldLook.close
+        case .flap: SwissLook.close
+        case .zoomRects: PlatinumLook.close
+        case .refresh: EInkLook.close
+        case .shoji: LacquerLook.close
+        case .press: RisoLook.close
         }
     }
 }
@@ -232,6 +282,16 @@ struct PanelMotion: ViewModifier {
             content.modifier(CyanotypePanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
         case .detent:
             content.modifier(FieldPanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
+        case .flap:
+            content.modifier(SwissPanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
+        case .zoomRects:
+            content.modifier(PlatinumPanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
+        case .refresh:
+            content.modifier(EInkPanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
+        case .shoji:
+            content.modifier(LacquerPanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
+        case .press:
+            content.modifier(RisoPanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
         }
     }
 }
@@ -258,6 +318,11 @@ struct RevealItem: ViewModifier {
         case .slam: CGSize(width: 0, height: 14 * k)
         case .plotter: CyanotypeLook.rowOffset
         case .detent: FieldLook.rowOffset
+        case .flap: SwissLook.rowOffset
+        case .zoomRects: PlatinumLook.rowOffset
+        case .refresh: EInkLook.rowOffset
+        case .shoji: LacquerLook.rowOffset
+        case .press: RisoLook.rowOffset
         }
         let scale: CGFloat = switch reveal {
         case .unfold: 1 - 0.06 * k
@@ -265,6 +330,11 @@ struct RevealItem: ViewModifier {
         case .slam: 1 - 0.15 * k
         case .plotter: CyanotypeLook.rowScale
         case .detent: FieldLook.rowScale
+        case .flap: SwissLook.rowScale
+        case .zoomRects: PlatinumLook.rowScale
+        case .refresh: EInkLook.rowScale
+        case .shoji: LacquerLook.rowScale
+        case .press: RisoLook.rowScale
         default: 1
         }
         content
@@ -356,6 +426,16 @@ struct OpeningEffect: View {
                 CyanotypeDevelop(trigger: trigger, size: size, radius: radius, tokens: tokens)
             case .field:
                 MeterCalibrate(trigger: trigger, size: size, radius: radius, tokens: tokens)
+            case .swiss:
+                SwissOpening(trigger: trigger, size: size, radius: radius, tokens: tokens)
+            case .platinum:
+                PlatinumOpening(trigger: trigger, size: size, radius: radius, tokens: tokens)
+            case .eink:
+                EInkOpening(trigger: trigger, size: size, radius: radius, tokens: tokens)
+            case .lacquer:
+                LacquerOpening(trigger: trigger, size: size, radius: radius, tokens: tokens)
+            case .riso:
+                RisoOpening(trigger: trigger, size: size, radius: radius, tokens: tokens)
             }
         }
     }

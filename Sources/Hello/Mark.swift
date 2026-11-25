@@ -68,6 +68,16 @@ struct HelloMark: View {
         case cyanotype(ink: Color, accent: Color)
         /// Atelier Champ : anneau d'encre, point en voyant.
         case field(ink: Color, dot: Color)
+        /// Atelier Suisse : voir StyleSwiss.swift.
+        case swiss(ink: Color, dot: Color)
+        /// Atelier Platine : voir StylePlatinum.swift.
+        case platinum(ink: Color, dot: Color)
+        /// E-Encre : voir StyleEInk.swift.
+        case eink(ink: Color, dot: Color)
+        /// Laque : voir StyleLacquer.swift.
+        case lacquer(ink: Color, dot: Color)
+        /// Riso : voir StyleRiso.swift.
+        case riso(ink: Color, dot: Color)
     }
 
     var skin: Skin
@@ -117,6 +127,16 @@ struct HelloMark: View {
             CyanotypeMarkRing(progress: progress, line: line, ink: ink, accent: accent)
         case .field(let ink, let dot):
             FieldMarkRing(progress: progress, line: line, ink: ink, dot: dot)
+        case .swiss(let ink, let dot):
+            SwissMarkRing(progress: progress, line: line, ink: ink, dot: dot)
+        case .platinum(let ink, let dot):
+            PlatinumMarkRing(progress: progress, line: line, ink: ink, dot: dot)
+        case .eink(let ink, let dot):
+            EInkMarkRing(progress: progress, line: line, ink: ink, dot: dot)
+        case .lacquer(let ink, let dot):
+            LacquerMarkRing(progress: progress, line: line, ink: ink, dot: dot)
+        case .riso(let ink, let dot):
+            RisoMarkRing(progress: progress, line: line, ink: ink, dot: dot)
         }
     }
 
@@ -144,6 +164,16 @@ struct HelloMark: View {
             CyanotypeMarkDot(radius: r, line: line, ink: ink, accent: accent)
         case .field(let ink, let dot):
             FieldMarkDot(radius: r, line: line, ink: ink, dot: dot)
+        case .swiss(let ink, let dot):
+            SwissMarkDot(radius: r, line: line, ink: ink, dot: dot)
+        case .platinum(let ink, let dot):
+            PlatinumMarkDot(radius: r, line: line, ink: ink, dot: dot)
+        case .eink(let ink, let dot):
+            EInkMarkDot(radius: r, line: line, ink: ink, dot: dot)
+        case .lacquer(let ink, let dot):
+            LacquerMarkDot(radius: r, line: line, ink: ink, dot: dot)
+        case .riso(let ink, let dot):
+            RisoMarkDot(radius: r, line: line, ink: ink, dot: dot)
         }
     }
 

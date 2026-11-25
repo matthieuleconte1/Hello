@@ -345,11 +345,46 @@ final class AppSettings: ObservableObject {
         didSet { Self.d.set(fieldEncoderColors, forKey: "fieldEncoderColors") }
     }
 
+    // Atelier Suisse (réglages décrits dans StyleSwiss.swift ; ajouter les suivants dans ce bloc)
+    @Published var swissMode = SwissMode(rawValue: value("swissMode", "auto")) ?? .auto {
+        didSet { Self.d.set(swissMode.rawValue, forKey: "swissMode") }
+    }
+    // fin Atelier Suisse
+
+
+    // Atelier Platine (réglages décrits dans StylePlatinum.swift ; ajouter les suivants dans ce bloc)
+    @Published var platinumMode = PlatinumMode(rawValue: value("platinumMode", "auto")) ?? .auto {
+        didSet { Self.d.set(platinumMode.rawValue, forKey: "platinumMode") }
+    }
+    // fin Atelier Platine
+
+
+    // E-Encre (réglages décrits dans StyleEInk.swift ; ajouter les suivants dans ce bloc)
+    @Published var einkMode = EInkMode(rawValue: value("einkMode", "auto")) ?? .auto {
+        didSet { Self.d.set(einkMode.rawValue, forKey: "einkMode") }
+    }
+    // fin E-Encre
+
+
+    // Laque (réglages décrits dans StyleLacquer.swift ; ajouter les suivants dans ce bloc)
+    @Published var lacquerMode = LacquerMode(rawValue: value("lacquerMode", "auto")) ?? .auto {
+        didSet { Self.d.set(lacquerMode.rawValue, forKey: "lacquerMode") }
+    }
+    // fin Laque
+
+
+    // Riso (réglages décrits dans StyleRiso.swift ; ajouter les suivants dans ce bloc)
+    @Published var risoMode = RisoMode(rawValue: value("risoMode", "auto")) ?? .auto {
+        didSet { Self.d.set(risoMode.rawValue, forKey: "risoMode") }
+    }
+    // fin Riso
+
+
     /// Tout ce qui change l'aspect du champ de recherche (police, couleurs) : il ne se reconfigure que si ça change.
     var styleSignature: String {
         [panelStyle.rawValue, atelierPalette.rawValue, "\(atelierSwap)", atelierAppearance.rawValue,
          glyphAccent.rawValue, glyphEffectiveAppearance.rawValue, "\(glyphNightLevel)", phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue,
-         cyanotypeTone.rawValue, "\(cyanotypeFlat)", fieldFinish.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
+         cyanotypeTone.rawValue, "\(cyanotypeFlat)", fieldFinish.rawValue, SwissLook.signature, PlatinumLook.signature, EInkLook.signature, LacquerLook.signature, RisoLook.signature, "\(textScale)", "\(StyleTokens.systemIsDark)"]
             .joined(separator: "|")
     }
 
@@ -510,6 +545,11 @@ final class AppSettings: ObservableObject {
         fieldFinish = .auto
         fieldGraduations = true
         fieldEncoderColors = true
+        SwissLook.resetSettings(self)
+        PlatinumLook.resetSettings(self)
+        EInkLook.resetSettings(self)
+        LacquerLook.resetSettings(self)
+        RisoLook.resetSettings(self)
     }
 
     func apply(_ preset: LookPreset) {
