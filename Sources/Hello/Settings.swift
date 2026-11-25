@@ -356,6 +356,14 @@ final class AppSettings: ObservableObject {
     @Published var platinumMode = PlatinumMode(rawValue: value("platinumMode", "auto")) ?? .auto {
         didSet { Self.d.set(platinumMode.rawValue, forKey: "platinumMode") }
     }
+    /// Couleur de surlignage (Mac OS 8) : bleu, lavande, menthe ou or.
+    @Published var platinumHighlight = PlatinumHighlight(rawValue: value("platinumHighlight", "blue")) ?? .blue {
+        didSet { Self.d.set(platinumHighlight.rawValue, forKey: "platinumHighlight") }
+    }
+    /// Fines rayures horizontales dans l'en-tête (pinstripes de Mac OS 8 et 9).
+    @Published var platinumPinstripes = value("platinumPinstripes", true) {
+        didSet { Self.d.set(platinumPinstripes, forKey: "platinumPinstripes") }
+    }
     // fin Atelier Platine
 
 
