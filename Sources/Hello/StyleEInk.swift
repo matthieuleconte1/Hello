@@ -59,8 +59,8 @@ struct EInkDecor {
 enum EInkLook {
     static let detail = "Dalle à encre électronique : gris minéral froid, contraste mat, vidéo inverse."
     static let symbol = "book.pages"
-    static let summary = "un flash d'inversion façon rafraîchissement e-ink (~55 ms), puis plus aucune animation."
-    static let effect = "un bref flash d'inversion de la dalle, comme un rafraîchissement complet d'encre électronique."
+    static let summary = "rafraîchissement complet de la dalle (négatif, noir, blanc), puis les lignes s'impriment par bandes."
+    static let effect = "la dalle passe en négatif, se vide en noir puis en blanc, et la page revient avec une légère rémanence."
 
     /// Variante sombre active.
     static var isDark: Bool {
@@ -183,7 +183,10 @@ enum EInkLook {
     static func open(light: Bool) -> Animation { .linear(duration: 0.001) }
     static let navigation = Animation.linear(duration: 0.001)
     static func modeTransition(forward: Bool) -> AnyTransition { .identity }
-    static func row(_ order: Int) -> Animation { .linear(duration: 0.001) }
+    /// Rafraîchissement partiel : après le flash, les lignes s'impriment par bandes, de haut en bas, sans fondu.
+    static func row(_ order: Int) -> Animation {
+        .linear(duration: 0.001).delay(0.2 + Double(min(order, 12)) * 0.045)
+    }
     static let close = Animation.linear(duration: 0.001)
     static var rowOffset: CGSize { .zero }
     static let rowScale: CGFloat = 1
@@ -202,14 +205,15 @@ struct EInkPanelMotion: ViewModifier {
     }
 }
 
-/// Effet d'ouverture : flash d'inversion e-ink d'environ 55 ms (rafraîchissement complet de la dalle),
-/// sauté lorsque `Motion.enabled` est faux (Réduire les animations).
+/// Effet d'ouverture : un vrai rafraîchissement complet de dalle e-ink. L'image passe en négatif, puis la dalle
+/// se vide (aplat noir puis blanc, deux temps francs), et la page revient avec une rémanence grise qui s'efface
+/// par paliers. Rien ne glisse ni ne fond : chaque état est tenu, comme sur une liseuse.
 struct EInkOpening: View {
     struct Values {
-        /// Intensité du flash d'inversion (0 : repos, 1 : inversion pleine).
-        var invert: Double = 0
-        /// Légère rémanence grise de ~25 ms juste après le retour à l'image.
-        var settle: Double = 0
+        /// 0 : repos ; 1 : négatif ; 2 : aplat d'encre ; 3 : aplat blanc.
+        var phase: Double = 0
+        /// Rémanence (ghosting) juste après le retour à l'image.
+        var ghost: Double = 0
     }
 
     let trigger: Int
@@ -224,30 +228,46 @@ struct EInkOpening: View {
             let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
             // Couleur de référence pour `.difference` : inverse exactement la dalle en négatif.
             let invertColor = tokens.dark ? Color(hex: "#EFE7D2") : Color(hex: "#ECECE8")
+            let inkFill = tokens.dark ? Color(hex: "#EFE7D2") : Color(hex: "#1A1A18")
+            let paperFill = tokens.dark ? Color(hex: "#151513") : Color(hex: "#ECECE8")
 
             Color.clear
                 .frame(width: size.width, height: size.height)
                 .keyframeAnimator(initialValue: Values(), trigger: trigger) { view, value in
                     view.overlay {
-                        if value.invert > 0.5 {
-                            shape
-                                .fill(invertColor)
-                                .blendMode(.difference)
-                        } else if value.settle > 0.01 {
-                            shape
-                                .fill(tokens.ink.opacity(0.08 * amp * value.settle))
+                        switch value.phase {
+                        case 0.5..<1.5:
+                            shape.fill(invertColor).blendMode(.difference)
+                        case 1.5..<2.5:
+                            shape.fill(inkFill)
+                        case 2.5..<3.5:
+                            shape.fill(paperFill)
+                        default:
+                            if value.ghost > 0.01 {
+                                // Rémanence : l'ancienne image en négatif, très pâle, qui s'efface par paliers.
+                                shape.fill(invertColor.opacity(0.22 * amp * value.ghost)).blendMode(.difference)
+                            }
                         }
                     }
                 } keyframes: { _ in
-                    KeyframeTrack(\.invert) {
+                    KeyframeTrack(\.phase) {
                         LinearKeyframe(1, duration: 0.001)
-                        LinearKeyframe(1, duration: 0.055 * t)
+                        LinearKeyframe(1, duration: 0.07 * t)
+                        LinearKeyframe(2, duration: 0.001)
+                        LinearKeyframe(2, duration: 0.055 * t)
+                        LinearKeyframe(3, duration: 0.001)
+                        LinearKeyframe(3, duration: 0.06 * t)
                         LinearKeyframe(0, duration: 0.001)
                     }
-                    KeyframeTrack(\.settle) {
-                        LinearKeyframe(0, duration: 0.056 * t)
-                        LinearKeyframe(1, duration: 0.004 * t)
-                        LinearKeyframe(0, duration: 0.028 * t)
+                    KeyframeTrack(\.ghost) {
+                        LinearKeyframe(0, duration: 0.187 * t)
+                        LinearKeyframe(1, duration: 0.001)
+                        LinearKeyframe(1, duration: 0.06 * t)
+                        LinearKeyframe(0.55, duration: 0.001)
+                        LinearKeyframe(0.55, duration: 0.06 * t)
+                        LinearKeyframe(0.2, duration: 0.001)
+                        LinearKeyframe(0.2, duration: 0.06 * t)
+                        LinearKeyframe(0, duration: 0.001)
                     }
                 }
                 .allowsHitTesting(false)
@@ -262,64 +282,21 @@ struct EInkOpening: View {
 // MARK: - Matière e-ink (motifs bitmap Retina calculés une seule fois et mis en cache)
 
 private enum EInkTextures {
-    static let grainDay = makeSlabGrain(dark: false)
-    static let grainNight = makeSlabGrain(dark: true)
-    static let bezelDay = makeBezelGrain(dark: false)
-    static let bezelNight = makeBezelGrain(dark: true)
 
     // Trames de Bayer 4×4 pour les pastilles et le tramage monochrome.
     static let bayerLightDay = makeBayer(density: 4, inkHex: 0x141414, alpha: 0.28)
     static let bayerLightNight = makeBayer(density: 4, inkHex: 0xE5DEC9, alpha: 0.30)
 
-    static func slabGrain(dark: Bool) -> NSImage { dark ? grainNight : grainDay }
-    static func bezelGrain(dark: Bool) -> NSImage { dark ? bezelNight : bezelDay }
+    /// Microcapsules de la dalle : grain minéral net, plus franc sur le bord mat.
+    static func slabGrain(dark: Bool) -> NSImage {
+        Grain.tile(Grain.Spec(amount: dark ? 0.10 : 0.11, lightShare: dark ? 0.7 : 0.5, specks: 0.008,
+                              seed: dark ? 0x6E31_9D4B_2A87_C513 : 0x4C7A_E109_8F32_B6D1))
+    }
+    static func bezelGrain(dark: Bool) -> NSImage {
+        Grain.tile(Grain.Spec(amount: dark ? 0.12 : 0.14, lightShare: 0.6, specks: 0.01,
+                              seed: dark ? 0x91B4_3C2F_7D50_E8A9 : 0x2F85_A61C_D904_73E5))
+    }
     static func bayerTile(dark: Bool) -> NSImage { dark ? bayerLightNight : bayerLightDay }
-
-    /// Micro-grain mat de microcapsules e-ink (tuile 128 × 128 pt @2x, déterministe, sans motif périodique).
-    private static func makeSlabGrain(dark: Bool) -> NSImage {
-        let side = 128, scale = 2
-        return bitmap(width: side, height: side, scale: scale) { data, pxW, pxH in
-            var seed: UInt64 = dark ? 0x6E31_9D4B_2A87_C513 : 0x4C7A_E109_8F32_B6D1
-            for y in 0..<pxH {
-                for x in 0..<pxW {
-                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                    let v = Double((seed >> 33) & 0xFFFF) / 65_535.0
-                    let centered = (v - 0.5) * 2.0
-                    let strength = abs(centered) * abs(centered) * (dark ? 0.034 : 0.044)
-                    let a = UInt8(min(max(strength * 255.0, 0), 255))
-                    let lum: UInt8 = centered > 0 ? a : 0
-                    let idx = (y * pxW + x) * 4
-                    data[idx] = lum
-                    data[idx + 1] = lum
-                    data[idx + 2] = lum
-                    data[idx + 3] = a
-                }
-            }
-        }
-    }
-
-    /// Grain minéral très légèrement plus présent sur le bord de dalle mat (cadre).
-    private static func makeBezelGrain(dark: Bool) -> NSImage {
-        let side = 128, scale = 2
-        return bitmap(width: side, height: side, scale: scale) { data, pxW, pxH in
-            var seed: UInt64 = dark ? 0x91B4_3C2F_7D50_E8A9 : 0x2F85_A61C_D904_73E5
-            for y in 0..<pxH {
-                for x in 0..<pxW {
-                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                    let v = Double((seed >> 33) & 0xFFFF) / 65_535.0
-                    let centered = (v - 0.5) * 2.0
-                    let strength = abs(centered) * abs(centered) * (dark ? 0.045 : 0.056)
-                    let a = UInt8(min(max(strength * 255.0, 0), 255))
-                    let lum: UInt8 = centered > 0 ? a : 0
-                    let idx = (y * pxW + x) * 4
-                    data[idx] = lum
-                    data[idx + 1] = lum
-                    data[idx + 2] = lum
-                    data[idx + 3] = a
-                }
-            }
-        }
-    }
 
     /// Matrice de Bayer 4×4 ordonnée (valeurs 0…15) : trame franche en points carrés 1 pt.
     private static let bayer4x4: [[Int]] = [

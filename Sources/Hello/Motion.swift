@@ -337,8 +337,11 @@ struct RevealItem: ViewModifier {
         case .press: RisoLook.rowScale
         default: 1
         }
+        // Suisse : chaque ligne bascule comme une palette de tableau de départ (rotation sur l'axe horizontal).
+        let tilt: Double = reveal == .flap ? SwissLook.rowTilt * Double(min(k, 1.2)) : 0
         content
             .opacity(hidden ? 0 : 1)
+            .rotation3DEffect(.degrees(hidden ? tilt : 0), axis: (x: 1, y: 0, z: 0), anchor: .top, perspective: 0.55)
             .scaleEffect(hidden ? scale : 1, anchor: .top)
             .offset(hidden ? offset : .zero)
             .animation(shown && animate ? Motion.scaled(reveal.row(order)) : nil, value: shown)

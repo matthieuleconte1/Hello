@@ -249,9 +249,9 @@ enum PlatinumLook {
     static let navigation = Animation.linear(duration: 0.08)
     static func modeTransition(forward: Bool) -> AnyTransition { .opacity }
 
-    /// Lignes affichées quasi instantanément, sans glissement mou.
+    /// Une fois la fenêtre posée, les lignes se dessinent de haut en bas comme une liste QuickDraw, sans fondu.
     static func row(_ order: Int) -> Animation {
-        .linear(duration: 0.001).delay(Double(min(order, 10)) * 0.006)
+        .linear(duration: 0.001).delay(0.21 + Double(min(order, 12)) * 0.022)
     }
 
     static let close = Animation.linear(duration: 0.16)
@@ -259,7 +259,9 @@ enum PlatinumLook {
     static let rowScale: CGFloat = 1
 }
 
-/// Le panneau entier : apparition nette sans rebond, et bref clignotement façon menu Mac OS au lancement d'une app.
+/// Le panneau entier, à la Mac OS 8/9 : d'abord les « Zoom Rects » (quatre cadres filaires qui grandissent du
+/// centre vers la fenêtre), et la fenêtre n'apparaît d'un coup qu'une fois le dernier cadre arrivé. Au lancement
+/// d'une app : le double clignotement d'un article de menu choisi.
 struct PlatinumPanelMotion: ViewModifier {
     let hidden: Bool
     let closing: Bool
@@ -269,6 +271,7 @@ struct PlatinumPanelMotion: ViewModifier {
     func body(content: Content) -> some View {
         let t = 1 / Motion.speed
         let dip = max(0.35, 1 - 0.55 * Double(min(Motion.amplitude, 1.2)))
+        let zoom = Motion.enabled && !light
         content
             .keyframeAnimator(initialValue: 1.0, trigger: closing) { view, flash in
                 view.opacity(closing && Motion.enabled ? flash : 1)
@@ -280,12 +283,55 @@ struct PlatinumPanelMotion: ViewModifier {
                     LinearKeyframe(1.0, duration: 0.045 * t)
                 }
             }
+            .keyframeAnimator(initialValue: 1.0, trigger: revealID) { view, progress in
+                // La fenêtre reste invisible pendant les cadres, puis s'affiche d'un bloc (aucun fondu).
+                view.opacity(!zoom || progress >= 0.999 ? 1 : 0)
+                    .overlay {
+                        if zoom && progress < 0.999 {
+                            ZoomRects(progress: progress, dark: StyleTokens.current.dark)
+                        }
+                    }
+            } keyframes: { _ in
+                LinearKeyframe(0, duration: 0.001)
+                LinearKeyframe(1, duration: 0.2 * t)
+            }
             .opacity(hidden ? 0 : 1)
     }
 }
 
-/// Effet d'ouverture « Zoom Rects » de Mac OS 8/9 : trois cadres filaires grandissent du centre vers le panneau
-/// en ~140 ms (décalés d'un cran chacun), puis disparaissent d'un coup.
+/// Quatre cadres filaires échelonnés qui grandissent du centre jusqu'au bord de la fenêtre, en paliers
+/// francs comme le Finder classique (pas d'anticrénelage flou, traits d'un point avec liseré contrasté).
+private struct ZoomRects: View {
+    let progress: Double
+    let dark: Bool
+
+    var body: some View {
+        let amp = Double(min(max(Motion.amplitude, 0.5), 1.4))
+        let startScale = max(0.06, 0.4 - 0.3 * amp)
+        Canvas { ctx, size in
+            let cx = size.width / 2, cy = size.height / 2
+            for index in 0..<4 {
+                let delay = Double(index) * 0.12
+                let local = min(max((progress - delay) / (1 - 0.36), 0), 1)
+                guard local > 0 else { continue }
+                // Paliers : six positions par cadre, comme un tracé XOR redessiné à chaque tic.
+                let stepped = (local * 6).rounded(.down) / 6
+                let eased = 1 - pow(1 - max(stepped, 0.08), 1.4)
+                let scale = startScale + (1 - startScale) * eased
+                let w = max(6, size.width * scale), h = max(6, size.height * scale)
+                let rect = CGRect(x: (cx - w / 2).rounded() + 0.5, y: (cy - h / 2).rounded() + 0.5,
+                                  width: max(2, w.rounded() - 1), height: max(2, h.rounded() - 1))
+                let halo = dark ? Color.black.opacity(0.7) : Color.white.opacity(0.9)
+                let wire = dark ? Color.white.opacity(0.95) : Color.black.opacity(0.9)
+                ctx.stroke(Path(rect.insetBy(dx: -1, dy: -1)), with: .color(halo), lineWidth: 1)
+                ctx.stroke(Path(rect), with: .color(wire), lineWidth: 1)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Les Zoom Rects sont joués par `PlatinumPanelMotion` (ils doivent précéder la fenêtre) : rien à dessiner ici.
 struct PlatinumOpening: View {
     let trigger: Int
     let size: CGSize
@@ -293,49 +339,7 @@ struct PlatinumOpening: View {
     let tokens: StyleTokens
 
     var body: some View {
-        let t = 1 / Motion.speed
-        let amp = Double(min(max(Motion.amplitude, 0.5), 1.4))
-        let startScale = max(0.12, 0.52 - 0.34 * amp)
-        let dark = tokens.dark
-
-        Color.clear
-            .frame(width: size.width, height: size.height)
-            .keyframeAnimator(initialValue: 0.0, trigger: trigger) { view, progress in
-                view.overlay {
-                    if progress > 0.001 && progress < 0.999 {
-                        Canvas { ctx, canvasSize in
-                            let cx = canvasSize.width / 2
-                            let cy = canvasSize.height / 2
-                            // Trois cadres filaires échelonnés (0.00, 0.16, 0.32) qui s'étendent vers le bord.
-                            for index in 0..<3 {
-                                let delay = Double(index) * 0.16
-                                let span = 1.0 - delay
-                                let local = min(max((progress - delay) / span, 0), 1)
-                                guard local > 0.01 && local < 0.99 else { continue }
-                                // Progression franche (3 paliers perceptibles façon Finder classique).
-                                let eased = 1 - pow(1 - local, 1.6)
-                                let s = startScale + (1.0 - startScale) * eased
-                                let w = max(4, canvasSize.width * s)
-                                let h = max(4, canvasSize.height * s)
-                                let rect = CGRect(x: (cx - w / 2).rounded() + 0.5,
-                                                  y: (cy - h / 2).rounded() + 0.5,
-                                                  width: max(2, w.rounded() - 1),
-                                                  height: max(2, h.rounded() - 1))
-                                let alpha = (1.0 - Double(index) * 0.18) * (local < 0.85 ? 1.0 : (1.0 - local) / 0.15)
-                                let halo = dark ? Color.black.opacity(0.65 * alpha) : Color.white.opacity(0.85 * alpha)
-                                let wire = dark ? Color.white.opacity(0.92 * alpha) : Color.black.opacity(0.88 * alpha)
-                                ctx.stroke(Path(rect.insetBy(dx: -1, dy: -1)), with: .color(halo), lineWidth: 1)
-                                ctx.stroke(Path(rect), with: .color(wire), lineWidth: 1)
-                            }
-                        }
-                    }
-                }
-            } keyframes: { _ in
-                LinearKeyframe(0, duration: 0.001)
-                LinearKeyframe(1, duration: 0.14 * t)
-                LinearKeyframe(1, duration: 0.01 * t)
-            }
-            .allowsHitTesting(false)
+        Color.clear.frame(width: size.width, height: size.height).allowsHitTesting(false)
     }
 }
 
@@ -397,6 +401,9 @@ struct PlatinumSurface: View {
             let stripePadV: CGFloat = full ? 9 : max(2, 5 * (h / 190.0))
 
             ZStack(alignment: .topLeading) {
+                // Plastique gris moulé : grain mat très fin, comme le boîtier d'un Mac beige.
+                GrainLayer(spec: Grain.Spec(amount: decor.dark ? 0.07 : 0.06, lightShare: 0.7, specks: 0.002,
+                                            seed: decor.dark ? 0x44C1_09E3 : 0x17AB_5D20))
                 // Rayures horizontales (pinstripes) dans l'en-tête, façon barre de titre Mac OS 8/9.
                 if decor.pinstripes && headerH >= 14 {
                     let stripeW = max(0, w - 2 * stripePadH)

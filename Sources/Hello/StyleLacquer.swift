@@ -140,7 +140,7 @@ struct LacquerDecor {
 enum LacquerLook {
     static let detail = "Laque urushi et kintsugi : ébène satiné, porcelaine mate et fil d'or."
     static let symbol = "seal"
-    static let summary = "glissement doux comme un paravent (8 pt en 320 ms) ; sélection calme et lente ; un fil d'or kintsugi se soude sous la recherche."
+    static let summary = "le panneau s'ouvre depuis le centre comme un paravent, le long d'un fil d'or kintsugi ; les lignes se posent lentement."
     static let effect = "un fil d'or kintsugi part du centre sous la recherche, s'étend, brille puis se pose doucement."
 
     /// Variante sombre active (Urushi et Cinabre sont sombres ; Porcelaine est claire).
@@ -253,11 +253,11 @@ enum LacquerLook {
 
     // MARK: Mouvement (paravent shoji)
 
-    /// Paravent : glissement doux de 8 pt en 320 ms, sans rebond.
+    /// Paravent : les vantaux s'écartent en 460 ms, départ posé et arrivée feutrée, sans rebond.
     static func open(light: Bool) -> Animation {
         light
             ? .timingCurve(0.22, 0.85, 0.32, 1, duration: 0.16)
-            : .timingCurve(0.22, 0.82, 0.28, 1, duration: 0.32)
+            : .timingCurve(0.45, 0.05, 0.2, 1, duration: 0.46)
     }
 
     static let navigation = Animation.timingCurve(0.24, 0.82, 0.3, 1, duration: 0.28)
@@ -272,11 +272,11 @@ enum LacquerLook {
 
     /// Cascade posée : les lignes se découvrent doucement derrière le paravent.
     static func row(_ order: Int) -> Animation {
-        .timingCurve(0.22, 0.82, 0.3, 1, duration: 0.26).delay(0.04 + Double(min(order, 12)) * 0.024)
+        .timingCurve(0.22, 0.82, 0.3, 1, duration: 0.4).delay(0.16 + Double(min(order, 12)) * 0.04)
     }
 
     static let close = Animation.easeIn(duration: 0.18)
-    static var rowOffset: CGSize { CGSize(width: 0, height: 6 * Motion.amplitude) }
+    static var rowOffset: CGSize { CGSize(width: 0, height: 8 * Motion.amplitude) }
     static let rowScale: CGFloat = 1
 }
 
@@ -295,7 +295,12 @@ struct LacquerPanelMotion: ViewModifier {
             .opacity(closing ? 0.55 : 1)
             .scaleEffect(closing ? 1 - 0.01 * k : 1, anchor: .center)
             .animation(Motion.scaled(LacquerLook.close), value: closing)
-            .offset(y: hidden ? -8 * k : 0)
+            // Les deux vantaux du paravent s'écartent depuis le centre, le long du fil d'or.
+            .mask {
+                // Marge négative : le masque déborde pour ne jamais rogner l'ombre portée.
+                Rectangle().padding(-60).scaleEffect(x: hidden && !light ? 0.06 : 1, y: 1, anchor: .center)
+            }
+            .offset(y: hidden ? -4 * k : 0)
             .opacity(hidden ? 0 : 1)
     }
 }
@@ -376,7 +381,7 @@ struct LacquerOpening: View {
 
                             // Fil d'or fin soudé.
                             ctx.opacity = value.opacity
-                            ctx.stroke(seam, with: gradient, style: StrokeStyle(lineWidth: 1.35, lineCap: .round))
+                            ctx.stroke(seam, with: gradient, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
 
                             // Fine veine secondaire qui s'échappe brièvement vers la droite du centre.
                             if showVein && value.span > 0.35 {
@@ -438,32 +443,15 @@ private extension Comparable {
 /// Textures déterministes calculées une seule fois en bitmap Retina : grain satiné de laque polie,
 /// grain minéral de porcelaine mate et veine d'or kintsugi discrète dans le coin inférieur droit.
 private enum LacquerTextures {
-    static let urushiGrain: NSImage = makeGrain(porcelain: false)
-    static let porcelainGrain: NSImage = makeGrain(porcelain: true)
     static let kintsugiVein: NSImage = makeKintsugiVein()
 
-    static func grain(dark: Bool) -> NSImage { dark ? urushiGrain : porcelainGrain }
-
-    /// Micro-grain satiné (urushi poli au charbon) ou minéral très fin (porcelaine mate).
-    private static func makeGrain(porcelain: Bool) -> NSImage {
-        let side = 128, scale = 2
-        return bitmapImage(width: side, height: side, scale: scale) { ctx in
-            var seed: UInt64 = porcelain ? 0x9C41_8B23_E5D0_4A17 : 0x3F82_D109_A6C4_7E5B
-            let maxAlpha: Double = porcelain ? 0.030 : 0.026
-            for y in 0..<(side * scale) {
-                for x in 0..<(side * scale) {
-                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                    let v = Double((seed >> 33) & 0xFFFF) / 65_535.0
-                    let centered = (v - 0.5) * 2.0
-                    let alpha = abs(centered) * abs(centered) * maxAlpha
-                    if alpha > 0.002 {
-                        let gray: CGFloat = centered > 0 ? 1.0 : 0.0
-                        ctx.setFillColor(CGColor(gray: gray, alpha: alpha))
-                        ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
-                    }
-                }
-            }
-        }
+    /// Urushi poli au charbon (reliefs dorés chauds) ou porcelaine mate (creux minéraux).
+    static func grain(dark: Bool) -> NSImage {
+        Grain.tile(dark
+            ? Grain.Spec(amount: 0.075, light: .init(r: 1.0, g: 0.86, b: 0.62), lightShare: 0.75, specks: 0.002,
+                         seed: 0x3F82_D109_A6C4_7E5B)
+            : Grain.Spec(amount: 0.07, shadow: .init(r: 0.22, g: 0.18, b: 0.14), lightShare: 0.5, specks: 0.005,
+                         seed: 0x9C41_8B23_E5D0_4A17))
     }
 
     /// Fine veine kintsugi organique, posée dans le coin inférieur droit du panneau (loin des titres et icônes).

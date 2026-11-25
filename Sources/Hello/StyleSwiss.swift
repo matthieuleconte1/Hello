@@ -165,7 +165,7 @@ enum SwissLook {
     /// Glissement sec qui se verrouille sans aucun rebond.
     static func open(light: Bool) -> Animation {
         light ? .timingCurve(0.16, 1, 0.3, 1, duration: 0.13)
-              : .timingCurve(0.16, 1, 0.3, 1, duration: 0.22)
+              : .timingCurve(0.2, 0.85, 0.25, 1, duration: 0.3)
     }
 
     static let navigation = Animation.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.16)
@@ -179,14 +179,18 @@ enum SwissLook {
         )
     }
 
-    /// Tableau à palettes : chaque ligne bascule avec un décalage exact de 25 ms.
+    /// Tableau à palettes : chaque ligne tombe de sa charnière et claque en place, 35 ms après la précédente.
+    /// La courbe accélère jusqu'au bout puis s'arrête net, comme une palette qui vient buter.
     static func row(_ order: Int) -> Animation {
-        .timingCurve(0.2, 0.9, 0.25, 1, duration: 0.18).delay(0.03 + Double(min(order, 12)) * 0.025)
+        .timingCurve(0.55, 0, 0.75, 0.25, duration: 0.2).delay(0.06 + Double(min(order, 12)) * 0.035)
     }
 
+    /// Angle de départ d'une ligne (palette relevée vers l'arrière).
+    static let rowTilt: Double = -88
+
     static let close = Animation.easeIn(duration: 0.14)
-    static var rowOffset: CGSize { CGSize(width: 0, height: -4 * Motion.amplitude) }
-    static let rowScale: CGFloat = 0.88
+    static var rowOffset: CGSize { .zero }
+    static let rowScale: CGFloat = 1
 }
 
 /// Le panneau entier : glisse de 12 pt et se verrouille sans rebond ; au lancement, retrait net vers le haut.
@@ -199,11 +203,16 @@ struct SwissPanelMotion: ViewModifier {
     func body(content: Content) -> some View {
         let k = Motion.amplitude * (light ? 0.35 : 1)
         let close = Motion.scaled(SwissLook.close)
+        // Le panneau se déroule depuis la barre de recherche comme un store de quai, sans rebond.
         content
             .offset(y: closing ? -8 * k : 0)
             .opacity(closing ? 0.45 : 1)
             .animation(close, value: closing)
-            .offset(y: hidden ? -12 * k : 0)
+            .mask(alignment: .top) {
+                // Marge négative : le masque déborde pour ne jamais rogner l'ombre portée du panneau.
+                Rectangle().padding(-60).scaleEffect(x: 1, y: hidden && !light ? 0.2 : 1, anchor: .top)
+            }
+            .offset(y: hidden ? -10 * k : 0)
             .opacity(hidden ? 0 : 1)
     }
 }
@@ -311,35 +320,13 @@ struct SwissOpening: View {
     }
 }
 
-/// Motifs répétés mis en cache en bitmap Retina (aucun recalcul par image).
+/// Grain d'émail mat (tableau de quai la nuit, papier couché le jour), partagé via `Grain`.
 private enum SwissTextures {
-    /// Micro-grain mat presque imperceptible sur le tableau nocturne (émail satiné d'affichage de quai).
-    static let matteDark = makeMatte(dark: true)
-    static let matteLight = makeMatte(dark: false)
-
-    static func matte(dark: Bool) -> NSImage { dark ? matteDark : matteLight }
-
-    private static func makeMatte(dark: Bool) -> NSImage {
-        let side = 96, scale = 2
-        let px = side * scale
-        guard let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-            return NSImage(size: NSSize(width: side, height: side))
-        }
-        var seed: UInt64 = dark ? 0x2F19_8C4A_9103_E6B1 : 0x7B4E_12D8_3C5A_09F3
-        for y in 0..<px {
-            for x in 0..<px {
-                seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                let v = Double((seed >> 33) & 0xFFFF) / 65535.0
-                let centered = (v - 0.5) * 2
-                let alpha = abs(centered) * abs(centered) * (dark ? 0.028 : 0.018)
-                ctx.setFillColor(CGColor(gray: centered > 0 ? 1 : 0, alpha: alpha))
-                ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
-            }
-        }
-        guard let cg = ctx.makeImage() else { return NSImage(size: NSSize(width: side, height: side)) }
-        return NSImage(cgImage: cg, size: NSSize(width: side, height: side))
+    static func matte(dark: Bool) -> NSImage {
+        Grain.tile(dark
+            ? Grain.Spec(amount: 0.085, lightShare: 0.9, specks: 0.002, seed: 0x2F19_8C4A_9103_E6B1)
+            : Grain.Spec(amount: 0.07, shadow: .init(r: 0.10, g: 0.09, b: 0.08), lightShare: 0.55, specks: 0.004,
+                         seed: 0x7B4E_12D8_3C5A_09F3))
     }
 }
 

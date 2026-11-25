@@ -177,7 +177,7 @@ enum RisoLook {
 
     /// Double passe nerveuse et nette (~280 ms).
     static func open(light: Bool) -> Animation {
-        light ? .easeOut(duration: 0.14) : .timingCurve(0.22, 0.9, 0.3, 1, duration: 0.28)
+        light ? .easeOut(duration: 0.14) : .spring(response: 0.3, dampingFraction: 0.72)
     }
 
     static let navigation = Animation.timingCurve(0.24, 0.88, 0.3, 1, duration: 0.18)
@@ -192,11 +192,11 @@ enum RisoLook {
     }
 
     static func row(_ order: Int) -> Animation {
-        .easeOut(duration: 0.18).delay(0.035 + Double(min(order, 12)) * 0.02)
+        .spring(response: 0.26, dampingFraction: 0.78).delay(0.08 + Double(min(order, 12)) * 0.03)
     }
 
     static let close = Animation.easeIn(duration: 0.15)
-    static var rowOffset: CGSize { CGSize(width: -4 * Motion.amplitude, height: 3 * Motion.amplitude) }
+    static var rowOffset: CGSize { CGSize(width: -9 * Motion.amplitude, height: 5 * Motion.amplitude) }
     static let rowScale: CGFloat = 1
 }
 
@@ -211,11 +211,13 @@ struct RisoPanelMotion: ViewModifier {
 
     func body(content: Content) -> some View {
         let k = Motion.amplitude * (light ? 0.35 : 1)
+        // La feuille entre dans la presse de travers et décalée, puis se cale d'un coup sec sur les taquets.
         content
             .offset(x: closing ? 3 * k : 0, y: closing ? 3 * k : 0)
             .opacity(closing ? 0.72 : 1)
             .animation(Motion.scaled(RisoLook.close), value: closing)
-            .offset(x: hidden ? -3 * k : 0, y: hidden ? -4 * k : 0)
+            .rotationEffect(.degrees(hidden ? -1.2 * k : 0), anchor: .topLeading)
+            .offset(x: hidden ? -10 * k : 0, y: hidden ? -14 * k : 0)
             .opacity(hidden ? 0 : 1)
     }
 }
@@ -255,14 +257,14 @@ struct RisoOpening: View {
                             if value.blueOpacity > 0.002 {
                                 shape
                                     .strokeBorder(blue, lineWidth: 2)
-                                    .offset(x: -5.5 * amp * value.blueShift, y: -3.5 * amp * value.blueShift)
+                                    .offset(x: -12 * amp * value.blueShift, y: -8 * amp * value.blueShift)
                                     .opacity(value.blueOpacity)
                                     .blendMode(blend)
                             }
                             // Passe 2 : Rose Fluo tramé qui vient se caler à (1,5 ; 1,5) pt de la passe bleue.
                             if value.pinkOpacity > 0.002 {
-                                let dx = 1.5 + 7.5 * amp * value.pinkShift
-                                let dy = 1.5 + 5.0 * amp * value.pinkShift
+                                let dx = 1.5 + 16 * amp * value.pinkShift
+                                let dy = 1.5 + 11 * amp * value.pinkShift
                                 ZStack {
                                     shape
                                         .fill(pink.opacity(dark ? 0.14 : 0.12))
@@ -340,14 +342,15 @@ private enum RisoTextures {
             return NSImage(size: NSSize(width: side, height: side))
         }
 
-        // Grain organique ~4 % (micro-alvéoles du papier recyclé non couché).
+        // Grain organique ~10 % (micro-alvéoles du papier recyclé non couché).
         for y in 0..<px {
             for x in 0..<px {
-                let n1 = hash(x, y, dark ? 101 : 17)
-                let n2 = hash(x / 2, y / 2, dark ? 137 : 43)
-                let combined = n1 * 0.62 + n2 * 0.38
+                // Cellules d'un et deux points : un grain que l'œil lit vraiment comme du papier.
+                let n1 = hash(x / 2, y / 2, dark ? 101 : 17)
+                let n2 = hash(x / 4, y / 4, dark ? 137 : 43)
+                let combined = n1 * 0.66 + n2 * 0.34
                 let centered = (combined - 0.5) * 2.0
-                let strength = abs(centered) * abs(centered) * (dark ? 0.058 : 0.055)
+                let strength = abs(centered) * (dark ? 0.11 : 0.12) * (centered > 0 ? 0.7 : 1)
                 let idx = (y * px + x) * 4
                 let a = UInt8(min(max(strength * 255.0, 0), 255))
                 if dark {

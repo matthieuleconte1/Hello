@@ -285,32 +285,15 @@ private struct FieldMeterBar: View {
 
 /// Motifs répétés calculés une seule fois en bitmap Retina (aucun recalcul par image).
 private enum FieldTextures {
-    static let beadLight = makeBead(dark: false)
-    static let beadDark = makeBead(dark: true)
     static let scaleLight = makeScale(dark: false)
     static let scaleDark = makeScale(dark: true)
 
-    static func bead(dark: Bool) -> NSImage { dark ? beadDark : beadLight }
-    static func scale(dark: Bool) -> NSImage { dark ? scaleDark : scaleLight }
-
-    /// Aluminium microbillé : grain isotrope très fin (pixel par pixel), sans aucune strie, déterministe.
-    private static func makeBead(dark: Bool) -> NSImage {
-        let side = 128, scale = 2
-        return bitmapImage(width: side, height: side, scale: scale) { ctx in
-            var seed: UInt64 = dark ? 0x51A7_9E23_B401_D3F7 : 0xA93C_41F0_7E2D_8B15
-            for y in 0..<(side * scale) {
-                for x in 0..<(side * scale) {
-                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                    let value = Double((seed >> 33) & 0xFFFF) / 65535.0
-                    // Distribution resserrée autour du milieu : un grain mat, pas un bruit qui scintille.
-                    let centered = (value - 0.5) * 2
-                    let alpha = abs(centered) * abs(centered) * (dark ? 0.06 : 0.075)
-                    ctx.setFillColor(CGColor(gray: centered > 0 ? 1 : 0, alpha: alpha))
-                    ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
-                }
-            }
-        }
+    /// Aluminium microbillé : grain isotrope serré, sans strie.
+    static func bead(dark: Bool) -> NSImage {
+        Grain.tile(Grain.Spec(amount: dark ? 0.085 : 0.09, lightShare: dark ? 0.8 : 1.0, specks: 0.0015,
+                              seed: dark ? 0x51A7_9E23_B401_D3F7 : 0xA93C_41F0_7E2D_8B15))
     }
+    static func scale(dark: Bool) -> NSImage { dark ? scaleDark : scaleLight }
 
     /// Échelle pointillée sérigraphiée : un point tous les 8 pt, un peu plus gros tous les cinq.
     private static func makeScale(dark: Bool) -> NSImage {
