@@ -316,14 +316,16 @@ final class AppSettings: ObservableObject {
     }
 
     // Cyanotype (réglages décrits dans StyleCyanotype.swift)
-    @Published var cyanotypeTone = CyanotypeTone(rawValue: value("cyanotypeTone", "prussian")) ?? .prussian {
+    @Published var cyanotypeTone = CyanotypeTone(rawValue: value("cyanotypeTone", "atkins")) ?? .atkins {
         didSet { Self.d.set(cyanotypeTone.rawValue, forKey: "cyanotypeTone") }
     }
-    /// Icônes d'apps dessinées au trait (sinon : en lavis bleu, sans traits).
-    @Published var cyanotypeLines = value("cyanotypeLines", true) { didSet { Self.d.set(cyanotypeLines, forKey: "cyanotypeLines") } }
-    /// Détail des traits des icônes : 0, seulement les grandes formes ; 1, tout ce qui contraste.
-    @Published var cyanotypeLineDetail = value("cyanotypeLineDetail", 0.55) {
-        didSet { Self.d.set(cyanotypeLineDetail, forKey: "cyanotypeLineDetail") }
+    /// Silhouettes végétales en filigrane (fougère, algue, ombelle) sur le fond sensibilisé.
+    @Published var cyanotypeHerbarium = value("cyanotypeHerbarium", true) {
+        didSet { Self.d.set(cyanotypeHerbarium, forKey: "cyanotypeHerbarium") }
+    }
+    /// Icônes d'apps rendues en photogramme blanc-bleuté (sinon : leurs couleurs adoucies).
+    @Published var cyanotypePhotogram = value("cyanotypePhotogram", true) {
+        didSet { Self.d.set(cyanotypePhotogram, forKey: "cyanotypePhotogram") }
     }
 
     // Atelier Champ (réglages décrits dans StyleField.swift)
@@ -497,9 +499,9 @@ final class AppSettings: ObservableObject {
         phosphorColor = .green
         paperTone = .cream
         brutalColor = .pink
-        cyanotypeTone = .prussian
-        cyanotypeLines = true
-        cyanotypeLineDetail = 0.55
+        cyanotypeTone = .atkins
+        cyanotypeHerbarium = true
+        cyanotypePhotogram = true
         fieldFinish = .auto
         fieldGraduations = true
         fieldEncoderColors = true

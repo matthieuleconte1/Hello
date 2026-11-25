@@ -148,7 +148,7 @@ struct StyleTokens {
         case inset(frame: Color, pane: Color)
     }
 
-    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized, label, blueprint }
+    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized, label, handwritten }
     enum TileStyle {
         case tinted, cookie, outline, bordered
         /// Carré aux coins doux qui s'arrondissent et prennent l'accent une fois choisi (Glyphe).
@@ -252,8 +252,16 @@ struct StyleTokens {
     var coloredSelection = false
     /// Curseur bloc qui clignote devant la ligne sélectionnée (Phosphore).
     var blinkingCursor = false
-    /// Couleur des traits intérieurs de l'icône choisie, quand elle est au trait ; nil : noir si `iconTint`, sinon l'encre.
-    var iconLineSelected: Color?
+    /// Traitement photogramme des icônes d'apps (Cyanotype) : silhouette translucide et halo lumineux.
+    struct IconPhotogram {
+        var dark: Bool
+        var tint: Color
+        var highlight: Color
+        var glow: Color
+    }
+
+    /// Photogramme d'icône (Cyanotype) ; nil : rendu habituel (`iconTint` / `iconSaturation`).
+    var iconPhotogram: IconPhotogram?
     /// Ce que le style dessine en plus, par-dessus les composants partagés (voir `Decor`).
     var decor: Decor = .none
 
@@ -332,10 +340,9 @@ struct StyleTokens {
 
     func sectionTitle(_ text: String) -> String {
         switch header {
-        case .plain, .serifItalic, .emphasized: text
+        case .plain, .serifItalic, .emphasized, .handwritten: text
         case .kicker, .label: text.uppercased()
         case .comment: "// " + text.lowercased()
-        case .blueprint: "[ " + text.uppercased() + " ]"
         }
     }
 
@@ -346,15 +353,22 @@ struct StyleTokens {
         case .comment: .system(size: 11, weight: .regular, design: .monospaced)
         case .serifItalic: .system(size: 12.5, weight: .regular, design: .serif).italic()
         case .emphasized: font(12.5, .bold, width: 112)
-        case .label, .blueprint: .system(size: 10.5, weight: .medium, design: .monospaced)
+        case .label: .system(size: 10.5, weight: .medium, design: .monospaced)
+        case .handwritten: Self.handwrittenSectionFont
         }
     }
+
+    private static let handwrittenSectionFont: Font = {
+        if let font = NSFont(name: "SnellRoundhand", size: 17) ?? NSFont(name: "Apple-Chancery", size: 14.5) {
+            return Font(font as CTFont)
+        }
+        return .system(size: 13.5, weight: .regular, design: .serif).italic()
+    }()
 
     var sectionTracking: CGFloat {
         switch header {
         case .kicker: 1.2
         case .label: 0.7
-        case .blueprint: 1.4
         default: 0
         }
     }
@@ -822,15 +836,64 @@ struct SymbolTile: View {
 }
 
 extension View {
-    /// Icônes d'apps monochromes ou désaturées pour les styles qui le demandent.
+    /// Icônes d'apps en photogramme, monochromes ou désaturées pour les styles qui le demandent.
     @ViewBuilder
     func styledIcon(_ style: StyleTokens) -> some View {
-        if let tint = style.iconTint {
+        if let photogram = style.iconPhotogram {
+            modifier(PhotogramIcon(spec: photogram))
+        } else if let tint = style.iconTint {
             grayscale(1).colorMultiply(tint)
         } else if style.iconSaturation < 1 {
             saturation(style.iconSaturation)
         } else {
             self
+        }
+    }
+}
+
+/// Photogramme d'une icône d'app : silhouette translucide (négatif blanc-bleuté façon callas sur tirage sombre,
+/// bichromie bleu de Prusse sur papier sur tirage clair) entourée d'un léger halo ; choisie, elle prend la lumière.
+private struct PhotogramIcon: ViewModifier {
+    let spec: StyleTokens.IconPhotogram
+    @Environment(\.rowSelected) private var selected
+
+    func body(content: Content) -> some View {
+        if spec.dark {
+            ZStack {
+                // Voile translucide équilibré : même les icônes très claires (Notes) gardent une belle présence.
+                content
+                    .grayscale(1)
+                    .brightness(1)
+                    .colorMultiply(selected ? spec.highlight : spec.tint)
+                    .opacity(selected ? 0.36 : 0.25)
+                // Empreinte inversée contrastée : les formes internes (boussole, >_, note) restent nettes et lumineuses.
+                content
+                    .grayscale(1)
+                    .colorInvert()
+                    .contrast(selected ? 1.24 : 1.12)
+                    .brightness(selected ? 0.10 : 0.05)
+                    .colorMultiply(selected ? spec.highlight : spec.tint)
+                    .opacity(selected ? 0.92 : 0.78)
+                    .blendMode(.screen)
+            }
+            .compositingGroup()
+            .shadow(color: spec.glow.opacity(selected ? 0.68 : 0.36), radius: selected ? 4.5 : 2.2)
+        } else {
+            // Tirage délavé : vraie bichromie cyanotype (les noirs deviennent bleu de Prusse profond, jamais noirs).
+            ZStack {
+                content
+                    .grayscale(1)
+                    .brightness(1)
+                    .colorMultiply(selected ? spec.highlight : spec.tint)
+                content
+                    .grayscale(1)
+                    .contrast(selected ? 1.12 : 1.0)
+                    .colorMultiply(Color(hex: "#EAF3FA"))
+                    .opacity(selected ? 0.64 : 0.58)
+                    .blendMode(.screen)
+            }
+            .compositingGroup()
+            .shadow(color: spec.glow.opacity(selected ? 0.72 : 0.48), radius: selected ? 3.5 : 2.0)
         }
     }
 }
@@ -854,7 +917,7 @@ struct AppIconImage: View {
             .overlay {
                 if kind != nil, let drawing = outline.image {
                     Image(nsImage: drawing).renderingMode(.template).resizable().interpolation(.high)
-                        .foregroundStyle(selected ? style.iconLineSelected ?? (style.iconTint != nil ? Color.black.opacity(0.85) : style.ink)
+                        .foregroundStyle(selected ? (style.iconTint != nil ? Color.black.opacity(0.85) : style.ink)
                                          : style.ink)
                         .allowsHitTesting(false)
                 }

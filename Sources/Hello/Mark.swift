@@ -64,7 +64,7 @@ struct HelloMark: View {
         case paper(ink: Color, dot: Color)
         /// Néo-brutal : anneau rose cerclé de noir, point jaune.
         case brutal(Color)
-        /// Cyanotype : l'anneau tracé au trait fin, comme sur un plan ; le point est une mire.
+        /// Cyanotype : l'anneau et le point en photogramme blanc translucide avec halo, sur pastille de Prusse.
         case cyanotype(ink: Color, accent: Color)
         /// Atelier Champ : anneau d'encre, point en voyant.
         case field(ink: Color, dot: Color)
