@@ -377,6 +377,14 @@ final class AppSettings: ObservableObject {
     @Published var risoMode = RisoMode(rawValue: value("risoMode", "auto")) ?? .auto {
         didSet { Self.d.set(risoMode.rawValue, forKey: "risoMode") }
     }
+    /// Trame de points demi-teinte sur les aplats rose fluo.
+    @Published var risoHalftone = value("risoHalftone", true) {
+        didSet { Self.d.set(risoHalftone, forKey: "risoHalftone") }
+    }
+    /// Icônes d'apps teintées dans l'encre bleue principale (sinon : couleurs adoucies).
+    @Published var risoDuotoneIcons = value("risoDuotoneIcons", true) {
+        didSet { Self.d.set(risoDuotoneIcons, forKey: "risoDuotoneIcons") }
+    }
     // fin Riso
 
 
