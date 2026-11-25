@@ -363,6 +363,14 @@ final class AppSettings: ObservableObject {
     @Published var einkMode = EInkMode(rawValue: value("einkMode", "auto")) ?? .auto {
         didSet { Self.d.set(einkMode.rawValue, forKey: "einkMode") }
     }
+    /// Très fin grain minéral de microcapsules sur la dalle et le cadre.
+    @Published var einkGrain = value("einkGrain", true) {
+        didSet { Self.d.set(einkGrain, forKey: "einkGrain") }
+    }
+    /// Pastilles d'actions tramées (matrice de Bayer 4×4) plutôt qu'en aplat uni.
+    @Published var einkDitherTiles = value("einkDitherTiles", true) {
+        didSet { Self.d.set(einkDitherTiles, forKey: "einkDitherTiles") }
+    }
     // fin E-Encre
 
 
