@@ -16,7 +16,7 @@ enum RevealStyle {
     case page
     /// Néo-brutal : le panneau tombe et rebondit sur son ombre, lignes qui sautent en place.
     case slam
-    /// Cyanotype : la table traçante dessine le cadre et les axes, puis les lignes arrivent sans rebond.
+    /// Cyanotype : le tirage se développe du vert-jaune ferreux au bleu de Prusse, les lignes montent en fondu doux.
     case plotter
     /// Atelier Champ : l'instrument se met sous tension, cranté comme un encodeur.
     case detent
@@ -353,7 +353,7 @@ struct OpeningEffect: View {
                 // Joué sous le panneau, avec l'ombre pleine (StampShadow).
                 EmptyView()
             case .cyanotype:
-                PlotterTrace(trigger: trigger, size: size, radius: radius, tokens: tokens)
+                CyanotypeDevelop(trigger: trigger, size: size, radius: radius, tokens: tokens)
             case .field:
                 MeterCalibrate(trigger: trigger, size: size, radius: radius, tokens: tokens)
             }
