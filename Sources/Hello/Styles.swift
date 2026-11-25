@@ -148,7 +148,7 @@ struct StyleTokens {
         case inset(frame: Color, pane: Color)
     }
 
-    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized, label, handwritten }
+    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized, label, handwritten, lowercase }
     enum TileStyle {
         case tinted, cookie, outline, bordered
         /// Carré aux coins doux qui s'arrondissent et prennent l'accent une fois choisi (Glyphe).
@@ -220,10 +220,14 @@ struct StyleTokens {
     var primaryKeyFill: Color?
     var primaryKeyInk: Color?
     var keyHardShadow = false
+    /// Touches en relief : capuchon posé sur le châssis, ombre courte et arête éclairée (Atelier Champ).
+    var keyRaised = false
     /// Touches en chasse fixe, comme les libellés (`kbd` de Glyphe).
     var monoKeys = false
     /// Libellés du pied de page en capitales étroites (la Nuit de Glyphe).
     var chromeCaps = false
+    /// Libellés du pied de page en minuscules légères, comme sérigraphiés sur un instrument (Atelier Champ).
+    var chromeLower = false
     /// Filet pointillé sous les titres de section.
     var sectionRule: Color?
     /// Couleur imposée à l'effet de lancement (au lieu de celle de l'app) : la Nuit ne s'éclaire qu'en rouge.
@@ -341,6 +345,7 @@ struct StyleTokens {
     func sectionTitle(_ text: String) -> String {
         switch header {
         case .plain, .serifItalic, .emphasized, .handwritten: text
+        case .lowercase: text.lowercased()
         case .kicker, .label: text.uppercased()
         case .comment: "// " + text.lowercased()
         }
@@ -355,6 +360,7 @@ struct StyleTokens {
         case .emphasized: font(12.5, .bold, width: 112)
         case .label: .system(size: 10.5, weight: .medium, design: .monospaced)
         case .handwritten: Self.handwrittenSectionFont
+        case .lowercase: .system(size: 12.5, weight: .regular)
         }
     }
 
@@ -1154,7 +1160,9 @@ struct StyleSample: View {
 
             HStack(spacing: 6 * s) {
                 Spacer()
-                if s >= 0.8 { Text("Ouvrir").font(.system(size: 11, design: t.design)) }
+                if s >= 0.8 {
+                    Text(t.chromeCaps ? "OUVRIR" : t.chromeLower ? "ouvrir" : "Ouvrir").font(.system(size: 11, design: t.design))
+                }
                 KeyCap("↵", primary: true).scaleEffect(min(1, s + 0.2))
             }
             .padding(.horizontal, 10 * s)

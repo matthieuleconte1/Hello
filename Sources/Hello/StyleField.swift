@@ -2,12 +2,14 @@ import AppKit
 import SwiftUI
 
 // Atelier Champ : le design system Field de Teenage Engineering (OP-1 Field, TX-6, TP-7).
-// Un châssis d'aluminium anodisé encadre un écran mat ; quatre couleurs d'encodeurs, des graduations, des crans.
+// Un châssis d'aluminium microbillé sertit un plateau de touches blanches derrière un joint sombre ; quatre couleurs
+// d'encodeurs (marine, havane, pierre, orange), des échelles pointillées, des libellés en minuscules, des crans.
+// En noir, le châssis est anodisé mat et la ligne choisie s'allume comme une touche rétroéclairée.
 //
 // Ce fichier contient tout ce qui est propre au style. Les composants partagés l'appellent par ces points d'entrée :
 // `FieldLook` (jetons, mouvement), `FieldDecor` et les vues `Field…` (décor), `FieldSettings` (Réglages › Apparence).
 
-/// Fini du châssis : aluminium clair, écran OLED sur châssis noir, ou selon l'apparence du Mac.
+/// Fini du châssis : aluminium microbillé, noir anodisé, ou selon l'apparence du Mac (`oled` : nom historique du noir).
 enum FieldFinish: String, CaseIterable, Identifiable {
     case auto, aluminium, oled
     var id: String { rawValue }
@@ -15,32 +17,35 @@ enum FieldFinish: String, CaseIterable, Identifiable {
         switch self {
         case .auto: "Auto"
         case .aluminium: "Aluminium"
-        case .oled: "OLED"
+        case .oled: "Noir"
         }
     }
 }
 
-/// Palette de l'instrument : aluminium anodisé clair, alu noir sur écran OLED, et les quatre couleurs d'encodeurs.
+/// Palette de l'instrument : aluminium microbillé et touches blanches, noir anodisé et touches graphite,
+/// et les quatre couleurs d'encodeurs.
 enum FieldPalette {
-    // Aluminium (clair)
-    static let aluFrame = Color(hex: "#D6D7D2")
-    static let aluPane = Color(hex: "#EEEEEA")
+    // Aluminium (clair) : métal froid, touches blanc cassé, joint presque noir.
+    static let aluFrame = Color(hex: "#CED0D1")
+    static let aluPane = Color(hex: "#F6F5F1")
     static let aluInk = Color(hex: "#17181A")
-    static let aluAccent = Color(hex: "#F05023")
+    static let aluAccent = Color(hex: "#F2541B")
+    static let aluKey = Color(hex: "#F8F7F4")
 
-    // OLED (sombre)
-    static let oledFrame = Color(hex: "#1E1F22")
-    static let oledPane = Color(hex: "#0E0F11")
-    static let oledInk = Color(hex: "#F0F0EC")
-    static let oledAccent = Color(hex: "#FF5722")
-    static let oledSelection = Color(hex: "#1D2025")
-    static let oledKeyFill = Color(hex: "#2A2C31")
+    // Noir anodisé (sombre) : la ligne choisie s'allume comme une touche rétroéclairée.
+    static let oledFrame = Color(hex: "#1B1C1E")
+    static let oledPane = Color(hex: "#0D0E10")
+    static let oledInk = Color(hex: "#EDEDEA")
+    static let oledAccent = Color(hex: "#FF5A1F")
+    static let oledSelection = Color(hex: "#E6E5E1")
+    static let oledSelectionInk = Color(hex: "#141517")
+    static let oledKeyFill = Color(hex: "#2A2B2E")
 
-    // Encodeurs : orange, bleu, ocre, gris titane.
-    static let blue = Color(hex: "#2B6CF6")
-    static let ochre = Color(hex: "#E09B24")
-    static let titaniumLight = Color(hex: "#6F7379")
-    static let titaniumDark = Color(hex: "#7D828A")
+    // Encodeurs : orange, marine, havane, pierre.
+    static let blue = Color(hex: "#23315C")
+    static let ochre = Color(hex: "#C7A37B")
+    static let titaniumLight = Color(hex: "#A6A8AA")
+    static let titaniumDark = Color(hex: "#8C8F93")
 
     static func orange(dark: Bool) -> Color { dark ? oledAccent : aluAccent }
     static func titanium(dark: Bool) -> Color { dark ? titaniumDark : titaniumLight }
@@ -48,13 +53,13 @@ enum FieldPalette {
     /// Couleur d'un capuchon d'encodeur et encre de son symbole (l'ocre reste plus lisible avec une encre sombre).
     static func encoder(for name: String, dark: Bool, colored: Bool, selected: Bool) -> (fill: Color, ink: Color) {
         guard colored else {
-            return selected ? (orange(dark: dark), .white) : (titanium(dark: dark), .white)
+            return selected ? (orange(dark: dark), .white) : (titanium(dark: dark), aluInk)
         }
         switch encoderIndex(for: name) {
         case 0: return (orange(dark: dark), .white)
         case 1: return (blue, .white)
         case 2: return (ochre, aluInk)
-        default: return (titanium(dark: dark), .white)
+        default: return (titanium(dark: dark), aluInk)
         }
     }
 
@@ -82,7 +87,7 @@ struct FieldDecor {
 }
 
 enum FieldLook {
-    static let detail = "Châssis d'aluminium, écran encastré et quatre encodeurs."
+    static let detail = "Aluminium microbillé, touches blanches et quatre encodeurs."
     static let symbol = "dial.medium.fill"
     static let summary = "l'instrument se met sous tension sur un ressort très amorti ; la sélection avance par crans."
     static let effect = "un VU-mètre aux quatre couleurs se calibre le long du séparateur."
@@ -106,30 +111,30 @@ enum FieldLook {
             surface: .inset(frame: dark ? p.oledFrame : p.aluFrame, pane: dark ? p.oledPane : p.aluPane),
             dark: dark, ink: ink, chromeInk: ink, chromeDark: dark,
             accent: accent, accent2: p.blue, live: accent, toast: accent,
+            // Aluminium : la ligne choisie devient une touche noire sérigraphiée ; Noir : une touche qui s'allume.
             selectionFill: dark ? p.oledSelection : p.aluInk,
-            selectionInk: dark ? nil : p.aluPane,
-            // En OLED, un filet discret : le repère orange et la LED portent seuls l'accent, comme sur une façade.
-            selectionBorder: dark ? Color.white.opacity(0.16) : nil,
+            selectionInk: dark ? p.oledSelectionInk : p.aluPane,
+            selectionBorder: nil,
             selectionBorderWidth: 1,
-            rowRadius: 6, cellRadius: 10,
+            rowRadius: 7, cellRadius: 10,
             radius: 14,
-            border: (dark ? Color.black.opacity(0.65) : p.aluInk.opacity(0.18), 1),
-            divider: dark ? Color.white.opacity(0.10) : p.aluInk.opacity(0.13),
-            titleWeight: .medium, searchWeight: .medium, header: .label,
+            border: (dark ? Color.black.opacity(0.7) : p.aluInk.opacity(0.20), 1),
+            divider: .clear,
+            titleWeight: .regular, searchWeight: .light, header: .lowercase,
             markSkin: .field(ink: ink, dot: accent),
-            paneBorder: dark ? Color.white.opacity(0.09) : p.aluInk.opacity(0.14),
+            // Joint presque noir entre le châssis et le plateau de touches.
+            paneBorder: dark ? Color.black : p.aluInk.opacity(0.82),
             // Bouton Applications : un poussoir rond du châssis, noir sur l'aluminium, gris anthracite sur l'OLED.
             iconButton: dark ? (p.oledKeyFill, p.oledInk) : (p.aluInk, p.aluPane),
             strongMeta: true,
-            keyFill: dark ? p.oledKeyFill : p.aluPane,
-            keyInk: ink.opacity(dark ? 0.85 : 0.82),
-            keyBorder: dark ? Color.white.opacity(0.14) : p.aluInk.opacity(0.22),
+            keyFill: dark ? p.oledKeyFill : p.aluKey,
+            keyInk: ink.opacity(dark ? 0.85 : 0.78),
+            keyBorder: dark ? Color.black.opacity(0.6) : p.aluInk.opacity(0.14),
             primaryKeyFill: accent, primaryKeyInk: .white,
-            monoKeys: true, chromeCaps: true,
-            sectionRule: dark ? Color.white.opacity(0.10) : p.aluInk.opacity(0.10),
+            keyRaised: true, chromeLower: true,
             tile: .decor,
             // En Aluminium, les icônes d'apps sont légèrement adoucies pour s'accorder au métal mat ; pleines en OLED.
-            iconSaturation: dark ? 1.0 : 0.74,
+            iconSaturation: dark ? 1.0 : 0.8,
             // Pas mécanique sec : départ vif, arrêt net dans le cran.
             motion: .timingCurve(0.2, 0.9, 0.25, 1, duration: 0.11),
             decor: .field(FieldDecor(dark: dark, ink: ink, accent: accent,
@@ -250,7 +255,7 @@ struct MeterCalibrate: View {
     }
 }
 
-/// Barre segmentée du VU-mètre : titane → bleu → ocre → orange, comme une échelle de niveau sur un instrument.
+/// Barre segmentée du VU-mètre : pierre → marine → havane → orange, comme une échelle de niveau sur un instrument.
 private struct FieldMeterBar: View {
     let segments: Int
     let level: CGFloat
@@ -272,7 +277,7 @@ private struct FieldMeterBar: View {
 
     private func color(at position: CGFloat) -> Color {
         if position <= 0.28 { return FieldPalette.titanium(dark: dark) }
-        if position <= 0.58 { return FieldPalette.blue }
+        if position <= 0.58 { return dark ? Color(hex: "#5B74B8") : FieldPalette.blue }
         if position <= 0.82 { return FieldPalette.ochre }
         return FieldPalette.orange(dark: dark)
     }
@@ -280,57 +285,45 @@ private struct FieldMeterBar: View {
 
 /// Motifs répétés calculés une seule fois en bitmap Retina (aucun recalcul par image).
 private enum FieldTextures {
-    static let brushedLight = makeBrushed(dark: false)
-    static let brushedDark = makeBrushed(dark: true)
-    static let gridLight = makeGrid(dark: false)
-    static let gridDark = makeGrid(dark: true)
-    static let rulerLight = makeRuler(dark: false)
-    static let rulerDark = makeRuler(dark: true)
+    static let beadLight = makeBead(dark: false)
+    static let beadDark = makeBead(dark: true)
+    static let scaleLight = makeScale(dark: false)
+    static let scaleDark = makeScale(dark: true)
 
-    static func brushed(dark: Bool) -> NSImage { dark ? brushedDark : brushedLight }
-    static func grid(dark: Bool) -> NSImage { dark ? gridDark : gridLight }
-    static func ruler(dark: Bool) -> NSImage { dark ? rulerDark : rulerLight }
+    static func bead(dark: Bool) -> NSImage { dark ? beadDark : beadLight }
+    static func scale(dark: Bool) -> NSImage { dark ? scaleDark : scaleLight }
 
-    /// Grain d'aluminium brossé horizontal très discret : fines stries déterministes d'un pixel.
-    private static func makeBrushed(dark: Bool) -> NSImage {
-        let width = 128, height = 64, scale = 2
-        return bitmapImage(width: width, height: height, scale: scale) { ctx in
+    /// Aluminium microbillé : grain isotrope très fin (pixel par pixel), sans aucune strie, déterministe.
+    private static func makeBead(dark: Bool) -> NSImage {
+        let side = 128, scale = 2
+        return bitmapImage(width: side, height: side, scale: scale) { ctx in
             var seed: UInt64 = dark ? 0x51A7_9E23_B401_D3F7 : 0xA93C_41F0_7E2D_8B15
-            for y in 0..<(height * scale) {
-                seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
-                let bright = (seed >> 33) & 1 == 0
-                let strength = Double((seed >> 40) & 0xFF) / 255.0
-                let alpha = (dark ? 0.022 : 0.036) * (0.25 + 0.75 * strength)
-                ctx.setFillColor(CGColor(gray: bright ? 1 : 0, alpha: alpha))
-                ctx.fill(CGRect(x: 0, y: y, width: width * scale, height: 1))
+            for y in 0..<(side * scale) {
+                for x in 0..<(side * scale) {
+                    seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                    let value = Double((seed >> 33) & 0xFFFF) / 65535.0
+                    // Distribution resserrée autour du milieu : un grain mat, pas un bruit qui scintille.
+                    let centered = (value - 0.5) * 2
+                    let alpha = abs(centered) * abs(centered) * (dark ? 0.06 : 0.075)
+                    ctx.setFillColor(CGColor(gray: centered > 0 ? 1 : 0, alpha: alpha))
+                    ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
+                }
             }
         }
     }
 
-    /// Micro-trame de points (16 × 16 pt) sur le fond de l'écran encastré.
-    private static func makeGrid(dark: Bool) -> NSImage {
-        let side = 16, scale = 2
-        let center = CGFloat(side * scale) / 2
-        return bitmapImage(width: side, height: side, scale: scale) { ctx in
-            ctx.setFillColor(CGColor(gray: dark ? 1 : 0, alpha: dark ? 0.065 : 0.055))
-            ctx.fill(CGRect(x: center, y: center, width: 1.5, height: 1.5))
-        }
-    }
-
-    /// Graduations de règle : 3 pt tous les 8 pt, et un repère de 5,5 pt tous les 5 traits (pas de 40 pt).
-    private static func makeRuler(dark: Bool) -> NSImage {
+    /// Échelle pointillée sérigraphiée : un point tous les 8 pt, un peu plus gros tous les cinq.
+    private static func makeScale(dark: Bool) -> NSImage {
         let step = 8, count = 5, scale = 2
         return bitmapImage(width: step * count, height: 6, scale: scale) { ctx in
-            let gray: CGFloat = dark ? 1 : 0.09
             for index in 0..<count {
                 let major = index == 0
-                let tickLength: CGFloat = major ? 5.5 : 3.0
-                let alpha: CGFloat = dark ? (major ? 0.38 : 0.18) : (major ? 0.40 : 0.20)
-                ctx.setFillColor(CGColor(gray: gray, alpha: alpha))
-                let offset = CGFloat(index * step) * CGFloat(scale)
-                let length = tickLength * CGFloat(scale)
-                // En coordonnées CGContext (y = 0 en bas), les traits partent du filet et montent dans le cadre.
-                ctx.fill(CGRect(x: offset, y: 0, width: CGFloat(scale), height: length))
+                let diameter: CGFloat = (major ? 2.2 : 1.5) * CGFloat(scale)
+                let alpha: CGFloat = dark ? (major ? 0.42 : 0.24) : (major ? 0.55 : 0.32)
+                ctx.setFillColor(CGColor(gray: dark ? 1 : 0.09, alpha: alpha))
+                let cx = CGFloat(index * step) * CGFloat(scale) + CGFloat(scale)
+                let cy = 3 * CGFloat(scale)
+                ctx.fillEllipse(in: CGRect(x: cx - diameter / 2, y: cy - diameter / 2, width: diameter, height: diameter))
             }
         }
     }
@@ -348,7 +341,7 @@ private enum FieldTextures {
     }
 }
 
-/// Châssis du panneau : grain d'aluminium brossé et chanfrein usiné (filet clair en haut, sombre en bas).
+/// Châssis du panneau : aluminium microbillé, lumière zénithale douce et chanfrein usiné (clair en haut, sombre en bas).
 struct FieldSurface: View {
     let decor: FieldDecor
     let radius: CGFloat
@@ -358,8 +351,12 @@ struct FieldSurface: View {
         let inner = RoundedRectangle(cornerRadius: max(radius - 1, 0), style: .continuous)
         ZStack {
             Rectangle()
-                .fill(ImagePaint(image: Image(nsImage: FieldTextures.brushed(dark: decor.dark))))
+                .fill(ImagePaint(image: Image(nsImage: FieldTextures.bead(dark: decor.dark))))
                 .clipShape(outer)
+            // Le microbillage diffuse la lumière : un très léger dégradé du haut vers le bas, jamais un reflet.
+            outer.fill(LinearGradient(colors: [Color.white.opacity(decor.dark ? 0.035 : 0.20), .clear,
+                                               Color.black.opacity(decor.dark ? 0.10 : 0.045)],
+                                      startPoint: .top, endPoint: .bottom))
 
             // Chanfrein d'1 px à l'intérieur du bord usiné : reflet zénithal en haut, ombre en bas.
             inner
@@ -383,7 +380,8 @@ struct FieldSurface: View {
     }
 }
 
-/// Écran intérieur encastré dans le châssis : micro-trame et chanfrein concave (ombre en haut, lèvre éclairée en bas).
+/// Plateau de touches serti dans le châssis : surface mate unie, arête supérieure éclairée et pied ombré,
+/// comme un capuchon posé juste au-dessus du joint.
 struct FieldPane: View {
     let decor: FieldDecor
     let radius: CGFloat
@@ -391,30 +389,20 @@ struct FieldPane: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         ZStack {
-            if decor.graduations {
-                Rectangle()
-                    .fill(ImagePaint(image: Image(nsImage: FieldTextures.grid(dark: decor.dark))))
-            }
-
-            // Légère ombre portée du rebord supérieur du châssis sur l'écran encastré.
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [Color.black.opacity(decor.dark ? 0.40 : 0.07), .clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 5)
-                Spacer(minLength: 0)
-            }
+            // Plastique mat : à peine plus clair en haut qu'en bas.
+            LinearGradient(colors: [Color.white.opacity(decor.dark ? 0.025 : 0.35), .clear,
+                                    Color.black.opacity(decor.dark ? 0.12 : 0.025)],
+                           startPoint: .top, endPoint: .bottom)
 
             shape
+                .inset(by: 1)
                 .strokeBorder(
                     LinearGradient(
                         stops: [
-                            .init(color: Color.black.opacity(decor.dark ? 0.55 : 0.14), location: 0.0),
-                            .init(color: .clear, location: 0.22),
-                            .init(color: .clear, location: 0.80),
-                            .init(color: Color.white.opacity(decor.dark ? 0.10 : 0.65), location: 1.0),
+                            .init(color: Color.white.opacity(decor.dark ? 0.09 : 0.95), location: 0.0),
+                            .init(color: .clear, location: 0.18),
+                            .init(color: .clear, location: 0.85),
+                            .init(color: Color.black.opacity(decor.dark ? 0.35 : 0.07), location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -485,7 +473,7 @@ struct FieldSelection: View {
     }
 }
 
-/// Séparateur gradué comme une règle (3 pt, repère plus long tous les 5 traits). L'échelle est gravée sur le châssis,
+/// Échelle pointillée (un point tous les 8 pt, plus gros tous les 5). Elle est sérigraphiée sur le châssis,
 /// jamais sur l'écran : sous l'en-tête, elle monte dans le cadre ; au-dessus du pied de page, elle y descend.
 /// Ailleurs (aperçus), un filet simple.
 struct FieldDivider: View {
@@ -498,10 +486,10 @@ struct FieldDivider: View {
             Color.clear
                 .overlay(alignment: footer ? .top : .bottom) {
                     Rectangle()
-                        .fill(ImagePaint(image: Image(nsImage: FieldTextures.ruler(dark: decor.dark))))
+                        .fill(ImagePaint(image: Image(nsImage: FieldTextures.scale(dark: decor.dark))))
                         .frame(height: 6)
-                        .scaleEffect(y: footer ? -1 : 1)
-                        .padding(.horizontal, 16)
+                        .offset(y: footer ? 4 : -4)
+                        .padding(.horizontal, 18)
                 }
                 .allowsHitTesting(false)
         }
@@ -522,11 +510,23 @@ struct FieldTile: View {
 
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
-            let inset: CGFloat = side > 12 ? 1 : 0
-            let capSide = max(side - 2 * inset, 2)
-            let showDetails = capSide >= 12
+            let showDetails = side >= 14
+            // Comme sur un plateau d'encodeurs : une cuvette cerclée dans la touche, le capuchon coloré au centre.
+            let capSide = showDetails ? side * 0.78 : max(side - 2, 2)
 
             ZStack {
+                if showDetails {
+                    Circle()
+                        .fill(decor.dark ? Color.white.opacity(0.05) : Color.black.opacity(0.035))
+                        .overlay {
+                            Circle().strokeBorder(
+                                LinearGradient(colors: [Color.black.opacity(decor.dark ? 0.5 : 0.16),
+                                                        Color.white.opacity(decor.dark ? 0.10 : 0.8)],
+                                               startPoint: .top, endPoint: .bottom),
+                                lineWidth: 0.75)
+                        }
+                        .frame(width: side, height: side)
+                }
                 Circle()
                     .fill(cap.fill)
                     .overlay {
@@ -547,6 +547,8 @@ struct FieldTile: View {
                             lineWidth: showDetails ? 0.75 : 0.5
                         )
                     }
+                    .shadow(color: .black.opacity(showDetails && !decor.dark ? 0.18 : 0), radius: 0.8, y: 0.8)
+                    .frame(width: capSide, height: capSide)
 
                 // Couronne et encoche qui tournent d'un cran (45°) à la sélection.
                 if showDetails {
@@ -562,15 +564,16 @@ struct FieldTile: View {
                             Spacer(minLength: 0)
                         }
                     }
+                    .frame(width: capSide, height: capSide)
                     .rotationEffect(.degrees(selected ? 45 : 0))
                     .animation(detent, value: selected)
 
                     Image(systemName: name)
-                        .font(.system(size: capSide * 0.40, weight: .semibold))
+                        .font(.system(size: capSide * 0.42, weight: .semibold))
                         .foregroundStyle(cap.ink)
                 }
             }
-            .frame(width: capSide, height: capSide)
+            .frame(width: side, height: side)
             .position(x: geo.size.width / 2, y: geo.size.height / 2)
             .scaleEffect(selected && showDetails ? 1.04 : 1)
             .animation(detent, value: selected)
@@ -621,12 +624,12 @@ struct FieldSettings: View {
                 ForEach(FieldFinish.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
-            Toggle("Graduations millimétrées", isOn: $settings.fieldGraduations)
+            Toggle("Échelles pointillées", isOn: $settings.fieldGraduations)
             Toggle("Quatre couleurs d'encodeurs", isOn: $settings.fieldEncoderColors)
         } header: {
             Text("Atelier Champ")
         } footer: {
-            Text("Châssis d'aluminium anodisé clair ou noir OLED. Sans les quatre couleurs, les encodeurs passent en titane et l'orange marque seul la sélection.")
+            Text("Aluminium microbillé ou noir anodisé. Sans les quatre couleurs, les encodeurs passent en pierre et l'orange marque seul la sélection.")
         }
     }
 }

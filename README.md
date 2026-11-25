@@ -90,8 +90,8 @@ Le même lanceur, huit directions artistiques complètes. Chacune a ses couleurs
 | **Phosphore** | écran cathodique en chasse fixe, vert, ambre, blanc ou cyan | allumage du tube, balayage, résultats affichés ligne par ligne |
 | **Papier** | papier crème, ivoire ou nuit, titres à empattements | la page se déplie, un trait d'encre se trace sous la recherche |
 | **Néo-brutal** | contours noirs, ombres pleines, couleurs franches | le panneau tombe et rebondit sur son ombre |
-| **Cyanotype** | plan d'architecte en bleu de Prusse, calque ou encre de nuit : papier millimétré, cartouche à double filet, crochets de visée autour de la ligne choisie, icônes d'apps dessinées au trait qui se remplissent d'un lavis | une table traçante dessine le cartouche et les axes, plume en tête |
-| **Atelier Champ** | le design system Field de Teenage Engineering : châssis d'aluminium (ou noir OLED), écran encastré, séparateurs gradués, encodeurs aux quatre couleurs qui tournent d'un cran, voyant LED sur la ligne choisie | un VU-mètre aux quatre couleurs se calibre sous la recherche |
+| **Cyanotype** | un tirage au ferroprussiate à la Anna Atkins : papier chiffon, bleu de Prusse étalé au pinceau aux bords frangés, herbier en photogramme (fougère, ombelle, algue), titres manuscrits, icônes d'apps en photogramme ; Atkins, Délavé ou Nuit | le voile ferreux s'oxyde en bleu puis se rince et révèle l'herbier |
+| **Atelier Champ** | le design system Field de Teenage Engineering : aluminium microbillé ou noir anodisé, plateau de touches blanches serti d'un joint sombre, échelles pointillées, libellés en minuscules, touches en relief, encodeurs marine, havane, pierre et orange qui tournent d'un cran ; en noir, la ligne choisie s'allume comme une touche rétroéclairée | un VU-mètre aux quatre couleurs se calibre sous la recherche |
 
 Tout se règle dans **Réglages › Apparence** et **Réglages › Animations** : intensité et vitesse des animations, densité des lignes, taille du texte, et un **mode focus** qui n'affiche que la barre de recherche à l'ouverture.
 

@@ -293,8 +293,9 @@ struct LauncherView: View {
                 .fixedSize()
             }
         }
-        .textCase(style.chromeCaps ? .uppercase : nil)
-        .font(style.chromeCaps ? .system(size: 11, weight: .medium).width(.condensed) : style.font(12))
+        .textCase(style.chromeCaps ? .uppercase : style.chromeLower ? .lowercase : nil)
+        .font(style.chromeCaps ? .system(size: 11, weight: .medium).width(.condensed)
+              : style.chromeLower ? .system(size: 12.5, weight: .regular) : style.font(12))
         .padding(.horizontal, 16)
         .frame(height: 40)
     }
@@ -1554,6 +1555,11 @@ struct KeyCap: View {
                 ZStack {
                     if style.keyHardShadow { shape.fill(Color.black).offset(x: 2, y: 2) }
                     shape.fill(filled ? style.primaryKeyFill ?? style.keyFill : style.keyFill)
+                        .shadow(color: .black.opacity(style.keyRaised ? 0.22 : 0), radius: 0.6, y: 1)
+                    if style.keyRaised {
+                        shape.strokeBorder(LinearGradient(colors: [.white.opacity(filled ? 0.35 : 0.7), .clear],
+                                                          startPoint: .top, endPoint: .center), lineWidth: 1)
+                    }
                     if let border = style.keyBorder, !filled || style.keyHardShadow {
                         shape.strokeBorder(border, lineWidth: style.keyHardShadow ? 1.5 : 1)
                     }
