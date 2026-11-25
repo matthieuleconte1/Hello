@@ -1,9 +1,10 @@
 import AppKit
 import SwiftUI
 
-// Atelier Suisse : d'après le manuel de signalétique CFF/SBB et le style typographique international (Müller-Brockmann).
+// Atelier Suisse : d'après le manuel de signalétique des chemins de fer suisses et le style typographique
+// international (Josef Müller-Brockmann). Grille visible par des filets fins, hiérarchie portée par la taille
+// et la graisse, noir et blanc tranchés, un seul rouge signal comme la trotteuse de l'horloge de gare.
 //
-// SOCLE (à remplacer) : ce fichier compile et branche la peau partout, avec un rendu minimal.
 // Tout ce qui est propre au style vit ici. Les composants partagés l'appellent par ces points d'entrée :
 // `SwissLook` (jetons, mouvement, réglages), `SwissDecor` et les vues `Swiss…` (décor), `SwissSettings` (Réglages › Apparence).
 
@@ -20,18 +21,47 @@ enum SwissMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Ce que le décor de la peau a besoin de savoir pour se dessiner.
+/// Palette de la signalétique : Jour (affiche blanche, encre noire, rouge signal) et Nuit (tableau de départ nocturne).
+enum SwissPalette {
+    // Jour : blanc pur, encre presque noire, secondaire gris neutre, rouge signal d'horloge de gare.
+    static let dayFrame = Color(hex: "#FFFFFF")
+    static let dayPane = Color(hex: "#FFFFFF")
+    static let dayInk = Color(hex: "#0D0D0D")
+    static let daySecondary = Color(hex: "#6B6B68")
+    static let dayRed = Color(hex: "#E10600")
+    static let daySelection = Color(hex: "#0D0D0D")
+    static let daySelectionInk = Color(hex: "#FFFFFF")
+
+    // Nuit : tableau de départ nocturne, fond noir profond, champ légèrement relevé, blanc chaud, rouge lumineux.
+    static let nightFrame = Color(hex: "#0D0D0D")
+    static let nightPane = Color(hex: "#121212")
+    static let nightInk = Color(hex: "#F7F7F5")
+    static let nightSecondary = Color(hex: "#8A8A86")
+    static let nightRed = Color(hex: "#FF241C")
+    static let nightSelection = Color(hex: "#F7F7F5")
+    static let nightSelectionInk = Color(hex: "#0D0D0D")
+    static let nightKeyFill = Color(hex: "#1A1A1A")
+
+    static func red(dark: Bool) -> Color { dark ? nightRed : dayRed }
+}
+
+/// Ce que le décor d'Atelier Suisse a besoin de savoir pour se dessiner.
 struct SwissDecor {
     var dark: Bool
+    var frame: Color
+    var pane: Color
     var ink: Color
+    var secondary: Color
     var accent: Color
+    var grid: Bool
+    var monoIcons: Bool
 }
 
 enum SwissLook {
-    static let detail = "Signalétique des chemins de fer suisses : Helvetica, noir et blanc, un point rouge."
+    static let detail = "Style typographique international et signalétique ferroviaire : grille fine, noir et blanc, un rouge signal."
     static let symbol = "clock"
-    static let summary = "les lignes basculent comme un tableau à palettes de gare."
-    static let effect = "les lignes basculent comme un tableau à palettes de gare."
+    static let summary = "le panneau glisse de 12 pt et se verrouille sans rebond ; les lignes basculent comme un tableau à palettes, décalées de 25 ms."
+    static let effect = "la trotteuse rouge fait un tour autour du logo pendant qu'une palette bascule sous la recherche."
 
     /// Variante sombre active.
     static var isDark: Bool {
@@ -40,55 +70,126 @@ enum SwissLook {
         return mode == .night
     }
 
-    /// Ce qui change l'aspect du champ de recherche (ajouter ici les réglages de la peau qui le touchent).
-    static var signature: String { AppSettings.shared.swissMode.rawValue }
+    /// Ce qui change l'aspect du champ de recherche.
+    static var signature: String {
+        let s = AppSettings.shared
+        return "\(s.swissMode.rawValue)|\(s.swissGrid)"
+    }
 
     /// « Réinitialiser l'apparence » : remet les réglages de la peau par défaut.
     static func resetSettings(_ s: AppSettings) {
         s.swissMode = .auto
+        s.swissGrid = true
+        s.swissMonoIcons = true
     }
 
     static var tokens: StyleTokens {
+        let p = SwissPalette.self
+        let settings = AppSettings.shared
         let dark = isDark
-        let frame = Color(hex: dark ? "#0D0D0D" : "#FFFFFF")
-        let pane = Color(hex: dark ? "#121212" : "#FFFFFF")
-        let ink = Color(hex: dark ? "#F7F7F5" : "#0D0D0D")
-        let accent = Color(hex: dark ? "#FF241C" : "#E10600")
+        let frame = dark ? p.nightFrame : p.dayFrame
+        let pane = dark ? p.nightPane : p.dayPane
+        let ink = dark ? p.nightInk : p.dayInk
+        let secondary = dark ? p.nightSecondary : p.daySecondary
+        let accent = p.red(dark: dark)
+
         return StyleTokens(
-            surface: .inset(frame: frame, pane: pane),
-            dark: dark, ink: ink, chromeInk: ink, chromeDark: dark,
-            accent: accent, live: accent, toast: accent,
-            selectionFill: Color(hex: dark ? "#F7F7F5" : "#0D0D0D"),
-            selectionInk: dark ? Color(hex: "#0D0D0D") : Color(hex: "#FFFFFF"),
-            rowRadius: 6, cellRadius: 10, radius: 12,
-            divider: ink.opacity(0.12),
+            // Surface pleine (pas `.inset`, qui forcerait un arrondi intérieur de 8 pt dans un cadre de 4 pt).
+            // En Nuit, `SwissSurface` peint le champ central `#121212` bord à bord entre les deux filets.
+            surface: .solid(frame),
+            dark: dark,
+            ink: ink,
+            chromeInk: ink,
+            chromeDark: dark,
+            accent: accent,
+            accent2: ink,
+            live: accent,
+            toast: accent,
+            // Inversion franche pleine largeur, sans bordure ni ombre.
+            selectionFill: dark ? p.nightSelection : p.daySelection,
+            selectionInk: dark ? p.nightSelectionInk : p.daySelectionInk,
+            selectionBorder: nil,
+            selectionBar: nil,
+            selectionHardShadow: nil,
+            rowRadius: 0,
+            cellRadius: 2,
+            radius: 4,
+            border: (dark ? ink.opacity(0.45) : ink, 1.5),
+            divider: ink.opacity(dark ? 0.24 : 0.28),
+            design: .default,
+            searchWidth: .condensed,
+            titleWeight: .medium,
+            searchWeight: .bold,
+            header: .kicker,
             markSkin: .swiss(ink: ink, dot: accent),
-            keyFill: pane, keyInk: ink.opacity(0.8),
-            primaryKeyFill: accent, primaryKeyInk: dark ? Color(hex: "#121212") : .white,
+            iconButton: (fill: ink, ink: frame),
+            strongMeta: true,
+            keyFill: dark ? p.nightKeyFill : p.dayFrame,
+            keyInk: ink.opacity(0.90),
+            keyBorder: ink.opacity(dark ? 0.36 : 0.45),
+            primaryKeyFill: accent,
+            primaryKeyInk: .white,
+            chromeCaps: true,
+            launchTint: accent,
             tile: .decor,
-            decor: .swiss(SwissDecor(dark: dark, ink: ink, accent: accent))
+            iconSaturation: settings.swissMonoIcons ? 0.0 : 1.0,
+            iconOpacity: 1.0,
+            // Saut mécanique sec sans rebond.
+            motion: .timingCurve(0.2, 0.9, 0.25, 1, duration: 0.10),
+            decor: .swiss(SwissDecor(
+                dark: dark,
+                frame: frame,
+                pane: pane,
+                ink: ink,
+                secondary: secondary,
+                accent: accent,
+                grid: settings.swissGrid,
+                monoIcons: settings.swissMonoIcons
+            ))
         )
     }
 
-    /// Fond derrière la vignette de la peau (Réglages et aperçus).
+    /// Fond derrière la vignette (Réglages et aperçus) : béton d'architecture en Jour, ardoise mate en Nuit.
     @ViewBuilder static var backdrop: some View {
-        LinearGradient(colors: isDark ? [Color(hex: "#2A2B2E"), Color(hex: "#0E0F11")]
-                                      : [Color(hex: "#C9CACC"), Color(hex: "#8E9094")],
-                       startPoint: .topLeading, endPoint: .bottomTrailing)
+        if isDark {
+            LinearGradient(colors: [Color(hex: "#2C2C2A"), Color(hex: "#181817")],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else {
+            LinearGradient(colors: [Color(hex: "#C6C6C2"), Color(hex: "#9A9A95")],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
     }
 
     // MARK: Mouvement
 
-    static func open(light: Bool) -> Animation { light ? .easeOut(duration: 0.14) : .easeOut(duration: 0.24) }
-    static let navigation = Animation.easeOut(duration: 0.18)
-    static func modeTransition(forward: Bool) -> AnyTransition { .opacity }
-    static func row(_ order: Int) -> Animation { .easeOut(duration: 0.2).delay(0.04 + Double(min(order, 12)) * 0.025) }
-    static let close = Animation.easeIn(duration: 0.16)
-    static var rowOffset: CGSize { CGSize(width: 0, height: 6 * Motion.amplitude) }
-    static let rowScale: CGFloat = 1
+    /// Glissement sec qui se verrouille sans aucun rebond.
+    static func open(light: Bool) -> Animation {
+        light ? .timingCurve(0.16, 1, 0.3, 1, duration: 0.13)
+              : .timingCurve(0.16, 1, 0.3, 1, duration: 0.22)
+    }
+
+    static let navigation = Animation.timingCurve(0.2, 0.9, 0.25, 1, duration: 0.16)
+
+    static func modeTransition(forward: Bool) -> AnyTransition {
+        let k = Motion.amplitude
+        let side: CGFloat = forward ? 1 : -1
+        return .asymmetric(
+            insertion: .offset(x: 14 * k * side).combined(with: .opacity),
+            removal: .offset(x: -10 * k * side).combined(with: .opacity)
+        )
+    }
+
+    /// Tableau à palettes : chaque ligne bascule avec un décalage exact de 25 ms.
+    static func row(_ order: Int) -> Animation {
+        .timingCurve(0.2, 0.9, 0.25, 1, duration: 0.18).delay(0.03 + Double(min(order, 12)) * 0.025)
+    }
+
+    static let close = Animation.easeIn(duration: 0.14)
+    static var rowOffset: CGSize { CGSize(width: 0, height: -4 * Motion.amplitude) }
+    static let rowScale: CGFloat = 0.88
 }
 
-/// Le panneau entier à l'ouverture et au lancement d'une app.
+/// Le panneau entier : glisse de 12 pt et se verrouille sans rebond ; au lancement, retrait net vers le haut.
 struct SwissPanelMotion: ViewModifier {
     let hidden: Bool
     let closing: Bool
@@ -96,56 +197,322 @@ struct SwissPanelMotion: ViewModifier {
     let revealID: Int
 
     func body(content: Content) -> some View {
+        let k = Motion.amplitude * (light ? 0.35 : 1)
+        let close = Motion.scaled(SwissLook.close)
         content
-            .opacity(closing ? 0.6 : 1)
-            .animation(Motion.scaled(SwissLook.close), value: closing)
-            .offset(y: hidden ? -6 * Motion.amplitude : 0)
+            .offset(y: closing ? -8 * k : 0)
+            .opacity(closing ? 0.45 : 1)
+            .animation(close, value: closing)
+            .offset(y: hidden ? -12 * k : 0)
             .opacity(hidden ? 0 : 1)
     }
 }
 
-/// Effet d'ouverture (joué par-dessus le panneau, réglage « Effet d'ouverture »).
+/// Effet d'ouverture : la trotteuse rouge fait un tour autour du logo avec la brève pause suisse à midi,
+/// tandis qu'une palette de tableau de départ bascule sous la recherche (rotation X).
 struct SwissOpening: View {
+    struct Values {
+        var handAngle: Double = 0
+        var handOpacity: Double = 0
+        var flapAngle: Double = -88
+        var flapOpacity: Double = 0
+    }
+
     let trigger: Int
     let size: CGSize
     let radius: CGFloat
     let tokens: StyleTokens
 
     var body: some View {
-        Color.clear.frame(width: size.width, height: size.height).allowsHitTesting(false)
+        let t = 1 / Motion.speed
+        let amp = Double(min(max(Motion.amplitude, 0.5), 1.4))
+        let isFull = size.height > 200
+        let headerY: CGFloat = isFull ? 60 : (size.height > 72 ? size.height * (40.0 / 190.0) : max(size.height - 4, 2))
+        let markCenter = CGPoint(x: isFull ? 29 : 20, y: isFull ? 30 : headerY / 2)
+        let handLength: CGFloat = isFull ? 13 : 9
+        let discDiameter: CGFloat = isFull ? 4.5 : 3.2
+
+        Color.clear
+            .frame(width: size.width, height: size.height)
+            .keyframeAnimator(initialValue: Values(), trigger: trigger) { view, value in
+                view.overlay(alignment: .topLeading) {
+                    ZStack(alignment: .topLeading) {
+                        // 1. La trotteuse rouge autour du logo.
+                        if value.handOpacity > 0.002 {
+                            ZStack {
+                                // Tige fine + disque rouge signature de la trotteuse de gare.
+                                VStack(spacing: 0) {
+                                    Circle()
+                                        .fill(tokens.accent)
+                                        .frame(width: discDiameter, height: discDiameter)
+                                    Rectangle()
+                                        .fill(tokens.accent)
+                                        .frame(width: 1.2, height: handLength * 0.72)
+                                    Spacer(minLength: 0)
+                                }
+                                .frame(height: handLength * 1.45)
+                                .offset(y: -handLength * 0.25)
+                            }
+                            .frame(width: handLength * 2, height: handLength * 2)
+                            .rotationEffect(.degrees(value.handAngle))
+                            .position(markCenter)
+                            .opacity(value.handOpacity)
+                        }
+
+                        // 2. Palette qui bascule sous la recherche (rotation 3D sur l'axe X), alignée sur la colonne de grille.
+                        if value.flapOpacity > 0.002 && size.height > 72 {
+                            HStack(spacing: 0) {
+                                Rectangle()
+                                    .fill(tokens.accent)
+                                    .frame(width: isFull ? 41.5 : 30)
+                                    .padding(.leading, isFull ? 8 : 6)
+                                Rectangle()
+                                    .fill(tokens.ink.opacity(tokens.dark ? 0.55 : 0.75))
+                            }
+                            .frame(width: size.width, height: 3.5)
+                            .rotation3DEffect(
+                                .degrees(value.flapAngle * amp),
+                                axis: (x: 1, y: 0, z: 0),
+                                anchor: .top,
+                                perspective: 0.45
+                            )
+                            .offset(y: headerY)
+                            .opacity(value.flapOpacity)
+                        }
+                    }
+                    .frame(width: size.width, height: size.height, alignment: .topLeading)
+                    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                }
+            } keyframes: { _ in
+                KeyframeTrack(\.handAngle) {
+                    LinearKeyframe(0, duration: 0.015 * t)
+                    CubicKeyframe(360, duration: 0.34 * t)
+                    // Brève pause caractéristique à 12 h avant effacement.
+                    LinearKeyframe(360, duration: 0.09 * t)
+                }
+                KeyframeTrack(\.handOpacity) {
+                    LinearKeyframe(1, duration: 0.02 * t)
+                    LinearKeyframe(1, duration: 0.34 * t)
+                    CubicKeyframe(0, duration: 0.085 * t)
+                }
+                KeyframeTrack(\.flapAngle) {
+                    LinearKeyframe(-88, duration: 0.02 * t)
+                    CubicKeyframe(0, duration: 0.16 * t)
+                    LinearKeyframe(0, duration: 0.14 * t)
+                    CubicKeyframe(85, duration: 0.11 * t)
+                }
+                KeyframeTrack(\.flapOpacity) {
+                    LinearKeyframe(0.95, duration: 0.02 * t)
+                    LinearKeyframe(0.95, duration: 0.30 * t)
+                    CubicKeyframe(0, duration: 0.11 * t)
+                }
+            }
+            .allowsHitTesting(false)
     }
 }
 
-/// Fond du cadre (sous le contenu).
+/// Motifs répétés mis en cache en bitmap Retina (aucun recalcul par image).
+private enum SwissTextures {
+    /// Micro-grain mat presque imperceptible sur le tableau nocturne (émail satiné d'affichage de quai).
+    static let matteDark = makeMatte(dark: true)
+    static let matteLight = makeMatte(dark: false)
+
+    static func matte(dark: Bool) -> NSImage { dark ? matteDark : matteLight }
+
+    private static func makeMatte(dark: Bool) -> NSImage {
+        let side = 96, scale = 2
+        let px = side * scale
+        guard let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return NSImage(size: NSSize(width: side, height: side))
+        }
+        var seed: UInt64 = dark ? 0x2F19_8C4A_9103_E6B1 : 0x7B4E_12D8_3C5A_09F3
+        for y in 0..<px {
+            for x in 0..<px {
+                seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                let v = Double((seed >> 33) & 0xFFFF) / 65535.0
+                let centered = (v - 0.5) * 2
+                let alpha = abs(centered) * abs(centered) * (dark ? 0.028 : 0.018)
+                ctx.setFillColor(CGColor(gray: centered > 0 ? 1 : 0, alpha: alpha))
+                ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
+            }
+        }
+        guard let cg = ctx.makeImage() else { return NSImage(size: NSSize(width: side, height: side)) }
+        return NSImage(cgImage: cg, size: NSSize(width: side, height: side))
+    }
+}
+
+/// Fond du cadre (sous le contenu) : en Nuit, champ central `#121212` entre en-tête et pied de page ;
+/// grille typographique suisse par des filets fins verticaux qui structurent les colonnes sans gêner la lecture.
 struct SwissSurface: View {
     let decor: SwissDecor
     let radius: CGFloat
-    var body: some View { EmptyView() }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let isFull = w >= 420 && h >= 220
+            let isSample = !isFull && w >= 200 && h >= 120
+            let headerH: CGFloat = isFull ? 60 : (isSample ? h * (40.0 / 190.0) : h * (40.0 / 190.0))
+            let footerH: CGFloat = isFull ? 40 : (isSample ? h * (26.0 / 190.0) : h * (26.0 / 190.0))
+
+            ZStack(alignment: .topLeading) {
+                // En Nuit, le champ central du tableau de départ se détache légèrement (#121212 sur #0D0D0D).
+                if decor.dark && h > headerH + footerH + 4 {
+                    Rectangle()
+                        .fill(decor.pane)
+                        .frame(width: w, height: h - headerH - footerH)
+                        .offset(y: headerH)
+                }
+
+                // Grain mat très discret (émail de panneau / papier couché mat).
+                Rectangle()
+                    .fill(ImagePaint(image: Image(nsImage: SwissTextures.matte(dark: decor.dark))))
+
+                // Grille typographique suisse : marge extérieure de la zone de contenu (8 pt), gouttière icône/titre (49,5 pt),
+                // et colonne dédiée aux accessoires de droite (w - 110 pt). Aucun filet ne touche un glyphe ni une icône.
+                if decor.grid && (isFull || isSample) {
+                    Canvas { ctx, size in
+                        let lineColor = decor.ink.opacity(decor.dark ? 0.09 : 0.085)
+                        let columns: [CGFloat] = isFull
+                            ? [8, 49.5, size.width - 110, size.width - 8]
+                            : [6, 36, size.width - 6]
+
+                        for x in columns {
+                            let alignedX = floor(x) + 0.25
+                            var path = Path()
+                            path.move(to: CGPoint(x: alignedX, y: headerH))
+                            path.addLine(to: CGPoint(x: alignedX, y: max(headerH, size.height - footerH)))
+                            ctx.stroke(path, with: .color(lineColor), lineWidth: 0.5)
+                        }
+
+                        // Repères de cadrage discrets en bordure haute et basse sur la marge de la grille.
+                        let tickColor = decor.ink.opacity(decor.dark ? 0.22 : 0.24)
+                        let tickLen: CGFloat = isFull ? 4 : 2.5
+                        for x in [columns.first, columns.last].compactMap({ $0 }) {
+                            let alignedX = floor(x) + 0.25
+                            var topTick = Path()
+                            topTick.move(to: CGPoint(x: alignedX, y: 0))
+                            topTick.addLine(to: CGPoint(x: alignedX, y: tickLen))
+                            ctx.stroke(topTick, with: .color(tickColor), lineWidth: 0.75)
+
+                            var botTick = Path()
+                            botTick.move(to: CGPoint(x: alignedX, y: size.height - tickLen))
+                            botTick.addLine(to: CGPoint(x: alignedX, y: size.height))
+                            ctx.stroke(botTick, with: .color(tickColor), lineWidth: 0.75)
+                        }
+                    }
+                }
+            }
+        }
+        .clipShape(shape)
+        .allowsHitTesting(false)
+    }
 }
 
-/// Fond du panneau intérieur (sous le contenu).
+/// Fond du panneau intérieur (conservé pour compatibilité de signature ; `.solid` utilise `SwissSurface`).
 struct SwissPane: View {
     let decor: SwissDecor
     let radius: CGFloat
-    var body: some View { EmptyView() }
+
+    var body: some View {
+        EmptyView()
+    }
 }
 
-/// Par-dessus le surlignage de la ligne choisie.
+/// Par-dessus le surlignage de la ligne choisie : ponctuée d'un disque rouge signal de 7 pt
+/// en haut à droite, hors du texte des accessoires.
 struct SwissSelection: View {
     let decor: SwissDecor
     let radius: CGFloat
-    var body: some View { EmptyView() }
+
+    var body: some View {
+        GeometryReader { geo in
+            let height = geo.size.height
+            let tiny = height < 16
+            let medium = height < 32
+            let dotSize: CGFloat = tiny ? 2.5 : (medium ? 4.5 : 7)
+            let topInset: CGFloat = tiny ? 1.5 : (medium ? 3.5 : 4.5)
+            let trailingInset: CGFloat = tiny ? 2 : (medium ? 4 : 5)
+
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Circle()
+                        .fill(decor.accent)
+                        .frame(width: dotSize, height: dotSize)
+                        .padding(.top, topInset)
+                        .padding(.trailing, trailingInset)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .allowsHitTesting(false)
+    }
 }
 
-/// Par-dessus un séparateur. `role` : sous l'en-tête, au-dessus du pied de page, ou ailleurs.
+/// Séparateurs comme une grille d'affiche : filet noir/blanc franc sous la recherche avec barre signal rouge
+/// alignée sur le logo, filet de grille avec repères de colonnes au-dessus du pied de page.
 struct SwissDivider: View {
     let decor: SwissDecor
     let vertical: Bool
     let role: StyleDivider.Role
-    var body: some View { EmptyView() }
+
+    var body: some View {
+        if vertical {
+            Rectangle()
+                .fill(decor.ink.opacity(decor.dark ? 0.28 : 0.38))
+                .frame(width: 1)
+                .allowsHitTesting(false)
+        } else {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let isFull = w >= 420
+                switch role {
+                case .header:
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(decor.ink.opacity(decor.dark ? 0.78 : 0.96))
+                            .frame(height: 1.5)
+                        // Segment rouge signal verrouillé sur la première colonne de la grille (8 → 49,5 pt).
+                        Rectangle()
+                            .fill(decor.accent)
+                            .frame(width: isFull ? 41.5 : 30, height: 2.5)
+                            .offset(x: isFull ? 8 : 6)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                case .footer:
+                    ZStack(alignment: .topLeading) {
+                        Rectangle()
+                            .fill(decor.ink.opacity(decor.dark ? 0.34 : 0.50))
+                            .frame(height: 1)
+                        if decor.grid && w >= 200 {
+                            let columns: [CGFloat] = isFull
+                                ? [8, 49.5, w - 110, w - 8]
+                                : [6, 36, w - 6]
+                            ForEach(Array(columns.enumerated()), id: \.offset) { _, x in
+                                Rectangle()
+                                    .fill(decor.ink.opacity(decor.dark ? 0.45 : 0.60))
+                                    .frame(width: 1, height: 4)
+                                    .offset(x: floor(x), y: -3)
+                            }
+                        }
+                    }
+                case .plain:
+                    Rectangle()
+                        .fill(decor.ink.opacity(decor.dark ? 0.24 : 0.28))
+                        .frame(height: 1)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
 }
 
-/// Pastille d'un symbole (recherche web, presse-papiers, réglages…).
+/// Pastille de pictogramme ferroviaire : noir et blanc contrasté au repos, couleur révélée sur la ligne choisie.
 struct SwissTile: View {
     let decor: SwissDecor
     let name: String
@@ -153,15 +520,34 @@ struct SwissTile: View {
     let selected: Bool
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(selected ? decor.accent : decor.ink.opacity(0.08))
-            .overlay(Image(systemName: name).font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(selected ? Color.white : decor.ink))
-            .padding(1.5)
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let corner: CGFloat = side >= 16 ? 2 : 1
+            let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
+            // Au repos : plaque monochrome à filet franc. Sélectionnée : la couleur (ou le rouge signal) se révèle.
+            let activeFill = tint == .gray ? decor.accent : tint
+            let fill: Color = selected ? activeFill : (decor.dark ? Color(hex: "#181816") : Color(hex: "#FFFFFF"))
+            let glyphColor: Color = selected ? .white : decor.ink
+
+            ZStack {
+                shape.fill(fill)
+                if !selected {
+                    shape.strokeBorder(decor.ink.opacity(decor.dark ? 0.48 : 0.85), lineWidth: side >= 16 ? 1 : 0.6)
+                }
+                if side >= 10 {
+                    Image(systemName: name)
+                        .font(.system(size: side * 0.50, weight: .semibold))
+                        .foregroundStyle(glyphColor)
+                }
+            }
+            .frame(width: side, height: side)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+        .padding(1)
     }
 }
 
-/// Anneau du logo.
+/// Anneau du logo façon horloge de gare : bouts droits géométriques et fine lunette de cadran.
 struct SwissMarkRing: View {
     let progress: CGFloat
     let line: CGFloat
@@ -169,12 +555,24 @@ struct SwissMarkRing: View {
     let dot: Color
 
     var body: some View {
-        MarkRing().trim(from: 0, to: progress)
-            .stroke(ink, style: StrokeStyle(lineWidth: line, lineCap: .round))
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            ZStack {
+                if side >= 16 {
+                    Circle()
+                        .inset(by: 0.5)
+                        .stroke(ink.opacity(0.18), lineWidth: 0.6)
+                }
+                MarkRing()
+                    .trim(from: 0, to: progress)
+                    .stroke(ink, style: StrokeStyle(lineWidth: line, lineCap: .butt))
+            }
+            .frame(width: side, height: side)
+        }
     }
 }
 
-/// Point du logo.
+/// Point du logo : le disque rouge signal de la trotteuse d'horloge de gare.
 struct SwissMarkDot: View {
     let radius: CGFloat
     let line: CGFloat
@@ -182,11 +580,14 @@ struct SwissMarkDot: View {
     let dot: Color
 
     var body: some View {
-        Circle().fill(dot).frame(width: 2 * radius, height: 2 * radius)
+        let diameter = 2.25 * radius
+        Circle()
+            .fill(dot)
+            .frame(width: diameter, height: diameter)
     }
 }
 
-/// Réglages › Apparence, quand la peau est choisie.
+/// Réglages › Apparence, quand Atelier Suisse est choisi.
 struct SwissSettings: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -196,6 +597,12 @@ struct SwissSettings: View {
                 ForEach(SwissMode.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
-        } header: { Text("Atelier Suisse") }
+            Toggle("Grille typographique", isOn: $settings.swissGrid)
+            Toggle("Icônes en noir et blanc", isOn: $settings.swissMonoIcons)
+        } header: {
+            Text("Atelier Suisse")
+        } footer: {
+            Text("Jour (affiche blanche) ou Nuit (tableau de départ nocturne). Filets de grille modulaires et unique rouge signal.")
+        }
     }
 }

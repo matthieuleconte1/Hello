@@ -349,6 +349,14 @@ final class AppSettings: ObservableObject {
     @Published var swissMode = SwissMode(rawValue: value("swissMode", "auto")) ?? .auto {
         didSet { Self.d.set(swissMode.rawValue, forKey: "swissMode") }
     }
+    /// Grille typographique visible par des filets fins et repères de colonnes.
+    @Published var swissGrid = value("swissGrid", true) {
+        didSet { Self.d.set(swissGrid, forKey: "swissGrid") }
+    }
+    /// Icônes d'apps en noir et blanc contrasté au repos.
+    @Published var swissMonoIcons = value("swissMonoIcons", true) {
+        didSet { Self.d.set(swissMonoIcons, forKey: "swissMonoIcons") }
+    }
     // fin Atelier Suisse
 
 
