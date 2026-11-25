@@ -67,6 +67,8 @@ struct CyanotypeDecor {
     /// Grain du papier aquarelle (creux et fibres claires).
     var grainDark: Color
     var grainLight: Color
+    /// Aplat contrasté : ni grain, ni lavis, ni bords au pinceau, ni halo ; la sélection est un aplat plein.
+    var flat = false
 }
 
 enum CyanotypeLook {
@@ -145,7 +147,14 @@ enum CyanotypeLook {
         let settings = AppSettings.shared
         let resolved = settings.cyanotypeTone.resolved
         let p = palette(resolved)
-        let photogram = settings.cyanotypePhotogram
+        let flat = settings.cyanotypeFlat
+        let photogram = settings.cyanotypePhotogram && !flat
+        // En aplat, la ligne choisie est un bandeau plein : papier sur le tirage sombre, bleu de Prusse sur le délavé.
+        let flatSelection: (fill: Color, ink: Color) = switch resolved {
+        case .washed: (Color(hex: "#163558"), Color(hex: "#F7FAFD"))
+        case .night: (Color(hex: "#C8DBEE"), Color(hex: "#051021"))
+        default: (p.frame, p.paperInk)
+        }
         let markDisc: Color = switch resolved {
         case .washed: Color(hex: "#5888B2")
         case .night: Color(hex: "#0F2647")
@@ -169,14 +178,15 @@ enum CyanotypeLook {
             surface: .inset(frame: p.frame, pane: p.pane),
             dark: p.dark, ink: p.ink, chromeInk: p.paperInk, chromeDark: p.chromeDark,
             accent: p.accent, accent2: p.glow, live: p.live, toast: p.toast,
-            // La sélection est entièrement rendue par `CyanotypeSelection` (lavis surexposé fondu dans le grain).
-            selectionFill: .clear,
+            // La sélection est rendue par `CyanotypeSelection` (lavis surexposé fondu dans le grain), ou en aplat plein.
+            selectionFill: flat ? flatSelection.fill : .clear,
+            selectionInk: flat ? flatSelection.ink : nil,
             rowRadius: 7, cellRadius: 11, radius: 15,
             border: (p.paperInk.opacity(p.chromeDark ? 0.16 : 0.14), 1),
             // Pas de filet rectiligne sur la marge papier : le bord passé au pinceau fait la séparation.
             divider: .clear,
             design: .default, titleWeight: .medium, searchWeight: .regular,
-            header: .handwritten,
+            header: flat ? .serifItalic : .handwritten,
             markSkin: .cyanotype(ink: markDisc, accent: markGlow),
             displayFamily: "Baskerville",
             paneBorder: nil,
@@ -201,7 +211,8 @@ enum CyanotypeLook {
                 dark: p.dark, chromeDark: p.chromeDark, herbarium: settings.cyanotypeHerbarium,
                 herbariumColor: p.herbariumColor, herbariumOpacity: p.herbariumOpacity,
                 grainDark: p.chromeDark ? Color.black.opacity(0.24) : Color(hex: "#574B36").opacity(0.105),
-                grainLight: Color.white.opacity(p.dark ? 0.095 : 0.24)
+                grainLight: Color.white.opacity(p.dark ? 0.095 : 0.24),
+                flat: flat
             ))
         )
     }
@@ -990,25 +1001,27 @@ struct CyanotypeSurface: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        ZStack {
-            // Légère lumière rasante naturelle sur la feuille de papier chiffon.
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(decor.chromeDark ? 0.035 : 0.14),
-                    .clear,
-                    Color.black.opacity(decor.chromeDark ? 0.10 : 0.035),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            CyanotypePaper.tiled(CyanotypePaper.grainDark, color: decor.grainDark)
-            CyanotypePaper.tiled(CyanotypePaper.grainLight, color: decor.grainLight)
-            // Doux filet intérieur clair, comme l'épaisseur d'un papier coton 300 g.
-            shape.strokeBorder(Color.white.opacity(decor.chromeDark ? 0.05 : 0.45), lineWidth: 1)
-                .padding(0.5)
+        if !decor.flat {
+            ZStack {
+                // Légère lumière rasante naturelle sur la feuille de papier chiffon.
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(decor.chromeDark ? 0.035 : 0.14),
+                        .clear,
+                        Color.black.opacity(decor.chromeDark ? 0.10 : 0.035),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                CyanotypePaper.tiled(CyanotypePaper.grainDark, color: decor.grainDark)
+                CyanotypePaper.tiled(CyanotypePaper.grainLight, color: decor.grainLight)
+                // Doux filet intérieur clair, comme l'épaisseur d'un papier coton 300 g.
+                shape.strokeBorder(Color.white.opacity(decor.chromeDark ? 0.05 : 0.45), lineWidth: 1)
+                    .padding(0.5)
+            }
+            .clipShape(shape)
+            .allowsHitTesting(false)
         }
-        .clipShape(shape)
-        .allowsHitTesting(false)
     }
 }
 
@@ -1019,6 +1032,27 @@ struct CyanotypePane: View {
     let radius: CGFloat
 
     var body: some View {
+        if decor.flat { flatBody } else { printBody }
+    }
+
+    /// Aplat : la couleur unie du tirage (posée par le panneau) et, si l'herbier est actif, ses silhouettes nettes.
+    private var flatBody: some View {
+        GeometryReader { geo in
+            if decor.herbarium {
+                Image(nsImage: CyanotypePaper.herbarium)
+                    .renderingMode(.template)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                    .foregroundStyle(decor.herbariumColor)
+                    .opacity(decor.herbariumOpacity * 0.8)
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var printBody: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
@@ -1139,6 +1173,10 @@ struct CyanotypeSelection: View {
     let radius: CGFloat
 
     var body: some View {
+        if !decor.flat { washBody }
+    }
+
+    private var washBody: some View {
         GeometryReader { geo in
             let wide = geo.size.width > geo.size.height * 2.2
             let wash = wide ? CyanotypePaper.selectionWashRow : CyanotypePaper.selectionWashCell
@@ -1189,10 +1227,12 @@ struct CyanotypeTile: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
-        let fill: Color = decor.dark
+        // En aplat sur tirage sombre, la ligne choisie est claire : la pastille passe en bleu de Prusse plein.
+        let flatOnLight = decor.flat && decor.dark && selected
+        let fill: Color = flatOnLight ? decor.pane : decor.dark
             ? decor.glow.opacity(selected ? 0.26 : 0.12)
             : (selected ? decor.accent : Color.white.opacity(0.58))
-        let stroke: Color = decor.dark
+        let stroke: Color = flatOnLight ? decor.pane : decor.dark
             ? decor.glow.opacity(selected ? 0.52 : 0.24)
             : (selected ? decor.accent : decor.accent.opacity(0.22))
         let glyphColor: Color = decor.dark
@@ -1206,7 +1246,7 @@ struct CyanotypeTile: View {
                 Image(systemName: name)
                     .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
                     .foregroundStyle(glyphColor)
-                    .shadow(color: decor.glow.opacity(decor.dark ? (selected ? 0.65 : 0.30) : 0),
+                    .shadow(color: decor.glow.opacity(decor.dark && !decor.flat ? (selected ? 0.65 : 0.30) : 0),
                             radius: selected ? 3.5 : 1.8)
             )
             .padding(1.5)
@@ -1226,33 +1266,41 @@ struct CyanotypeMarkRing: View {
 
     var body: some View {
         let trimmed = MarkRing().trim(from: 0, to: progress)
-        ZStack {
-            // Petite goutte sensibilisée au bleu de Prusse aux bords fondus dans le papier coton.
-            Circle()
-                .fill(
-                    RadialGradient(
-                        stops: [
-                            .init(color: ink, location: 0),
-                            .init(color: ink.opacity(0.95), location: 0.78),
-                            .init(color: ink.opacity(0.65), location: 0.94),
-                            .init(color: ink.opacity(0), location: 1.0),
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: max(8, line * 4.9)
+        if AppSettings.shared.cyanotypeFlat {
+            // Aplat : pastille pleine et anneau net, sans halo.
+            ZStack {
+                Circle().fill(ink).scaleEffect(1.22)
+                trimmed.stroke(Color.white, style: StrokeStyle(lineWidth: line, lineCap: .round))
+            }
+        } else {
+            ZStack {
+                // Petite goutte sensibilisée au bleu de Prusse aux bords fondus dans le papier coton.
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            stops: [
+                                .init(color: ink, location: 0),
+                                .init(color: ink.opacity(0.95), location: 0.78),
+                                .init(color: ink.opacity(0.65), location: 0.94),
+                                .init(color: ink.opacity(0), location: 1.0),
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: max(8, line * 4.9)
+                        )
                     )
-                )
-                .scaleEffect(1.34)
-            // Halo optique diffus autour de la silhouette blanche.
-            trimmed
-                .stroke(accent.opacity(0.45), style: StrokeStyle(lineWidth: line * 1.55, lineCap: .round))
-                .blur(radius: max(0.8, line * 0.45))
-            // Corps translucide du photogramme.
-            trimmed
-                .stroke(accent.opacity(0.84), style: StrokeStyle(lineWidth: line, lineCap: .round))
-            // Cœur plus blanc, comme l'épaisseur la plus opaque du sujet.
-            trimmed
-                .stroke(Color.white.opacity(0.65), style: StrokeStyle(lineWidth: line * 0.42, lineCap: .round))
+                    .scaleEffect(1.34)
+                // Halo optique diffus autour de la silhouette blanche.
+                trimmed
+                    .stroke(accent.opacity(0.45), style: StrokeStyle(lineWidth: line * 1.55, lineCap: .round))
+                    .blur(radius: max(0.8, line * 0.45))
+                // Corps translucide du photogramme.
+                trimmed
+                    .stroke(accent.opacity(0.84), style: StrokeStyle(lineWidth: line, lineCap: .round))
+                // Cœur plus blanc, comme l'épaisseur la plus opaque du sujet.
+                trimmed
+                    .stroke(Color.white.opacity(0.65), style: StrokeStyle(lineWidth: line * 0.42, lineCap: .round))
+            }
         }
     }
 }
@@ -1265,17 +1313,21 @@ struct CyanotypeMarkDot: View {
     let accent: Color
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(accent.opacity(0.5))
-                .frame(width: 2.9 * radius, height: 2.9 * radius)
-                .blur(radius: max(0.8, radius * 0.65))
-            Circle()
-                .fill(accent.opacity(0.90))
-                .frame(width: 2 * radius, height: 2 * radius)
-            Circle()
-                .fill(Color.white.opacity(0.72))
-                .frame(width: 1.05 * radius, height: 1.05 * radius)
+        if AppSettings.shared.cyanotypeFlat {
+            Circle().fill(Color.white).frame(width: 2 * radius, height: 2 * radius)
+        } else {
+            ZStack {
+                Circle()
+                    .fill(accent.opacity(0.5))
+                    .frame(width: 2.9 * radius, height: 2.9 * radius)
+                    .blur(radius: max(0.8, radius * 0.65))
+                Circle()
+                    .fill(accent.opacity(0.90))
+                    .frame(width: 2 * radius, height: 2 * radius)
+                Circle()
+                    .fill(Color.white.opacity(0.72))
+                    .frame(width: 1.05 * radius, height: 1.05 * radius)
+            }
         }
     }
 }
@@ -1293,8 +1345,10 @@ struct CyanotypeSettings: View {
             }
             Toggle("Herbier", isOn: $settings.cyanotypeHerbarium)
             Toggle("Icônes en photogramme", isOn: $settings.cyanotypePhotogram)
+                .disabled(settings.cyanotypeFlat)
+            Toggle("Aplat contrasté", isOn: $settings.cyanotypeFlat)
         } header: { Text("Cyanotype") } footer: {
-            Text("L'herbier pose en filigrane une fougère, une algue et une ombelle sur le tirage. En photogramme, les icônes d'apps deviennent des silhouettes translucides.")
+            Text("L'herbier pose en filigrane une fougère, une algue et une ombelle sur le tirage. En photogramme, les icônes d'apps deviennent des silhouettes translucides. L'aplat contrasté retire le grain, les halos et la surbrillance : couleurs unies, sélection pleine, icônes d'origine.")
         }
     }
 }

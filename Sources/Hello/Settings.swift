@@ -327,6 +327,10 @@ final class AppSettings: ObservableObject {
     @Published var cyanotypePhotogram = value("cyanotypePhotogram", true) {
         didSet { Self.d.set(cyanotypePhotogram, forKey: "cyanotypePhotogram") }
     }
+    /// Aplat contrasté : couleurs unies, sans grain, halo ni surbrillance ; sélection pleine.
+    @Published var cyanotypeFlat = value("cyanotypeFlat", false) {
+        didSet { Self.d.set(cyanotypeFlat, forKey: "cyanotypeFlat") }
+    }
 
     // Atelier Champ (réglages décrits dans StyleField.swift)
     @Published var fieldFinish = FieldFinish(rawValue: value("fieldFinish", "auto")) ?? .auto {
@@ -345,7 +349,7 @@ final class AppSettings: ObservableObject {
     var styleSignature: String {
         [panelStyle.rawValue, atelierPalette.rawValue, "\(atelierSwap)", atelierAppearance.rawValue,
          glyphAccent.rawValue, glyphEffectiveAppearance.rawValue, "\(glyphNightLevel)", phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue,
-         cyanotypeTone.rawValue, fieldFinish.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
+         cyanotypeTone.rawValue, "\(cyanotypeFlat)", fieldFinish.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
             .joined(separator: "|")
     }
 
@@ -502,6 +506,7 @@ final class AppSettings: ObservableObject {
         cyanotypeTone = .atkins
         cyanotypeHerbarium = true
         cyanotypePhotogram = true
+        cyanotypeFlat = false
         fieldFinish = .auto
         fieldGraduations = true
         fieldEncoderColors = true
