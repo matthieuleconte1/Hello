@@ -39,7 +39,7 @@ struct LauncherView: View {
             // Mode focus : rien sous la barre de recherche tant qu'on n'a rien tapé.
             if !model.collapsed {
                 Group {
-                    StyleDivider()
+                    StyleDivider(role: .header)
                     ZStack {
                         content
                             .id(model.mode)
@@ -57,7 +57,7 @@ struct LauncherView: View {
                     .styledPane(style, panelRadius: PanelLayout.radius)
                     .environment(\.colorScheme, style.dark ? .dark : .light)
                     .foregroundStyle(style.ink)
-                    StyleDivider()
+                    StyleDivider(role: .footer)
                     footer
                         .environment(\.colorScheme, style.chromeDark ? .dark : .light)
                         .foregroundStyle(style.chromeInk)
@@ -810,16 +810,19 @@ struct InkOverride: ViewModifier {
     }
 }
 
-/// Séparateur aux couleurs du style.
+/// Séparateur aux couleurs du style. `role` : sous l'en-tête, au-dessus du pied de page, ou ailleurs
+/// (certains décors le dessinent du côté du cadre, jamais sur le contenu).
 struct StyleDivider: View {
+    enum Role { case header, footer, plain }
     var vertical = false
+    var role = Role.plain
     @Environment(\.styleTokens) private var style
 
     var body: some View {
         Rectangle()
             .fill(style.divider)
             .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
-            .overlay { DecorDivider(decor: style.decor, vertical: vertical) }
+            .overlay { DecorDivider(decor: style.decor, vertical: vertical, role: role) }
     }
 }
 

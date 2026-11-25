@@ -1256,12 +1256,13 @@ struct DecorSelection: View {
 struct DecorDivider: View {
     let decor: StyleTokens.Decor
     let vertical: Bool
+    var role = StyleDivider.Role.plain
 
     var body: some View {
         switch decor {
         case .none: EmptyView()
         case .cyanotype(let d): CyanotypeDivider(decor: d, vertical: vertical)
-        case .field(let d): FieldDivider(decor: d, vertical: vertical)
+        case .field(let d): FieldDivider(decor: d, role: vertical ? .plain : role)
         }
     }
 }

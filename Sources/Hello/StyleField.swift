@@ -108,7 +108,8 @@ enum FieldLook {
             accent: accent, accent2: p.blue, live: accent, toast: accent,
             selectionFill: dark ? p.oledSelection : p.aluInk,
             selectionInk: dark ? nil : p.aluPane,
-            selectionBorder: dark ? accent : nil,
+            // En OLED, un filet discret : le repère orange et la LED portent seuls l'accent, comme sur une façade.
+            selectionBorder: dark ? Color.white.opacity(0.16) : nil,
             selectionBorderWidth: 1,
             rowRadius: 6, cellRadius: 10,
             radius: 14,
@@ -117,6 +118,8 @@ enum FieldLook {
             titleWeight: .medium, searchWeight: .medium, header: .label,
             markSkin: .field(ink: ink, dot: accent),
             paneBorder: dark ? Color.white.opacity(0.09) : p.aluInk.opacity(0.14),
+            // Bouton Applications : un poussoir rond du châssis, noir sur l'aluminium, gris anthracite sur l'OLED.
+            iconButton: dark ? (p.oledKeyFill, p.oledInk) : (p.aluInk, p.aluPane),
             strongMeta: true,
             keyFill: dark ? p.oledKeyFill : p.aluPane,
             keyInk: ink.opacity(dark ? 0.85 : 0.82),
@@ -281,17 +284,12 @@ private enum FieldTextures {
     static let brushedDark = makeBrushed(dark: true)
     static let gridLight = makeGrid(dark: false)
     static let gridDark = makeGrid(dark: true)
-    static let rulerHorizontalLight = makeRuler(dark: false, vertical: false)
-    static let rulerHorizontalDark = makeRuler(dark: true, vertical: false)
-    static let rulerVerticalLight = makeRuler(dark: false, vertical: true)
-    static let rulerVerticalDark = makeRuler(dark: true, vertical: true)
+    static let rulerLight = makeRuler(dark: false)
+    static let rulerDark = makeRuler(dark: true)
 
     static func brushed(dark: Bool) -> NSImage { dark ? brushedDark : brushedLight }
     static func grid(dark: Bool) -> NSImage { dark ? gridDark : gridLight }
-    static func ruler(dark: Bool, vertical: Bool) -> NSImage {
-        if vertical { return dark ? rulerVerticalDark : rulerVerticalLight }
-        return dark ? rulerHorizontalDark : rulerHorizontalLight
-    }
+    static func ruler(dark: Bool) -> NSImage { dark ? rulerDark : rulerLight }
 
     /// Grain d'aluminium brossé horizontal très discret : fines stries déterministes d'un pixel.
     private static func makeBrushed(dark: Bool) -> NSImage {
@@ -320,11 +318,9 @@ private enum FieldTextures {
     }
 
     /// Graduations de règle : 3 pt tous les 8 pt, et un repère de 5,5 pt tous les 5 traits (pas de 40 pt).
-    private static func makeRuler(dark: Bool, vertical: Bool) -> NSImage {
-        let step = 8, count = 5, span = step * count, depth = 6, scale = 2
-        let width = vertical ? depth : span
-        let height = vertical ? span : depth
-        return bitmapImage(width: width, height: height, scale: scale) { ctx in
+    private static func makeRuler(dark: Bool) -> NSImage {
+        let step = 8, count = 5, scale = 2
+        return bitmapImage(width: step * count, height: 6, scale: scale) { ctx in
             let gray: CGFloat = dark ? 1 : 0.09
             for index in 0..<count {
                 let major = index == 0
@@ -334,10 +330,7 @@ private enum FieldTextures {
                 let offset = CGFloat(index * step) * CGFloat(scale)
                 let length = tickLength * CGFloat(scale)
                 // En coordonnées CGContext (y = 0 en bas), les traits partent du filet et montent dans le cadre.
-                let rect = vertical
-                    ? CGRect(x: 0, y: offset, width: length, height: CGFloat(scale))
-                    : CGRect(x: offset, y: 0, width: CGFloat(scale), height: length)
-                ctx.fill(rect)
+                ctx.fill(CGRect(x: offset, y: 0, width: CGFloat(scale), height: length))
             }
         }
     }
@@ -492,20 +485,23 @@ struct FieldSelection: View {
     }
 }
 
-/// Séparateur gradué comme une règle (3 pt, repère plus long tous les 5 traits), posé sur le filet.
+/// Séparateur gradué comme une règle (3 pt, repère plus long tous les 5 traits). L'échelle est gravée sur le châssis,
+/// jamais sur l'écran : sous l'en-tête, elle monte dans le cadre ; au-dessus du pied de page, elle y descend.
+/// Ailleurs (aperçus), un filet simple.
 struct FieldDivider: View {
     let decor: FieldDecor
-    let vertical: Bool
+    let role: StyleDivider.Role
 
     var body: some View {
-        if decor.graduations {
-            let pattern = FieldTextures.ruler(dark: decor.dark, vertical: vertical)
+        if decor.graduations && role != .plain {
+            let footer = role == .footer
             Color.clear
-                .overlay(alignment: vertical ? .leading : .bottom) {
+                .overlay(alignment: footer ? .top : .bottom) {
                     Rectangle()
-                        .fill(ImagePaint(image: Image(nsImage: pattern)))
-                        .frame(width: vertical ? 6 : nil, height: vertical ? nil : 6)
-                        .padding(vertical ? .vertical : .horizontal, 16)
+                        .fill(ImagePaint(image: Image(nsImage: FieldTextures.ruler(dark: decor.dark))))
+                        .frame(height: 6)
+                        .scaleEffect(y: footer ? -1 : 1)
+                        .padding(.horizontal, 16)
                 }
                 .allowsHitTesting(false)
         }
