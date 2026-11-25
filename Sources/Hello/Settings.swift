@@ -330,6 +330,14 @@ final class AppSettings: ObservableObject {
     @Published var fieldFinish = FieldFinish(rawValue: value("fieldFinish", "auto")) ?? .auto {
         didSet { Self.d.set(fieldFinish.rawValue, forKey: "fieldFinish") }
     }
+    /// Graduations de règle sur les séparateurs et micro-trame discrète sur l'écran.
+    @Published var fieldGraduations = value("fieldGraduations", true) {
+        didSet { Self.d.set(fieldGraduations, forKey: "fieldGraduations") }
+    }
+    /// Pastilles d'encodeurs dans les quatre couleurs fonctionnelles (sinon : titane, orange à la sélection).
+    @Published var fieldEncoderColors = value("fieldEncoderColors", true) {
+        didSet { Self.d.set(fieldEncoderColors, forKey: "fieldEncoderColors") }
+    }
 
     /// Tout ce qui change l'aspect du champ de recherche (police, couleurs) : il ne se reconfigure que si ça change.
     var styleSignature: String {
@@ -493,6 +501,8 @@ final class AppSettings: ObservableObject {
         cyanotypeLines = true
         cyanotypeLineDetail = 0.55
         fieldFinish = .auto
+        fieldGraduations = true
+        fieldEncoderColors = true
     }
 
     func apply(_ preset: LookPreset) {

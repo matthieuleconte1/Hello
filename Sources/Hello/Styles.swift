@@ -234,6 +234,8 @@ struct StyleTokens {
     var tile: TileStyle = .tinted
     /// Icônes d'apps monochromes (Phosphore).
     var iconTint: Color?
+    /// Saturation des icônes d'apps (1 : couleurs pleines ; < 1 : légèrement désaturées, Atelier Champ en Aluminium).
+    var iconSaturation = 1.0
     /// Opacité des icônes d'apps au repos (la Nuit) ; pleine sur l'élément choisi.
     var iconOpacity = 1.0
     /// Icônes d'apps cernées d'un filet à l'encre, le long de leur bord (la Nuit : « au trait »).
@@ -820,11 +822,13 @@ struct SymbolTile: View {
 }
 
 extension View {
-    /// Icônes d'apps monochromes pour les styles qui le demandent.
+    /// Icônes d'apps monochromes ou désaturées pour les styles qui le demandent.
     @ViewBuilder
     func styledIcon(_ style: StyleTokens) -> some View {
         if let tint = style.iconTint {
             grayscale(1).colorMultiply(tint)
+        } else if style.iconSaturation < 1 {
+            saturation(style.iconSaturation)
         } else {
             self
         }
