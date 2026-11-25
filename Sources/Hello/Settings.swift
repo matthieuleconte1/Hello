@@ -370,6 +370,14 @@ final class AppSettings: ObservableObject {
     @Published var lacquerMode = LacquerMode(rawValue: value("lacquerMode", "auto")) ?? .auto {
         didSet { Self.d.set(lacquerMode.rawValue, forKey: "lacquerMode") }
     }
+    /// Fine veine d'or kintsugi en filigrane dans le panneau et réparation sur le logo.
+    @Published var lacquerKintsugi = value("lacquerKintsugi", true) {
+        didSet { Self.d.set(lacquerKintsugi, forKey: "lacquerKintsugi") }
+    }
+    /// Lustre satiné en haut du panneau, comme une laque urushi polie au charbon.
+    @Published var lacquerSheen = value("lacquerSheen", true) {
+        didSet { Self.d.set(lacquerSheen, forKey: "lacquerSheen") }
+    }
     // fin Laque
 
 
