@@ -775,6 +775,7 @@ struct SelectionFill: View {
                     Capsule().fill(bar).frame(width: 3).padding(.vertical, 10).padding(.leading, 3)
                 }
             }
+            .overlay { DecorSelection(decor: style.decor, radius: radius) }
         }
     }
 }
@@ -818,6 +819,7 @@ struct StyleDivider: View {
         Rectangle()
             .fill(style.divider)
             .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
+            .overlay { DecorDivider(decor: style.decor, vertical: vertical) }
     }
 }
 

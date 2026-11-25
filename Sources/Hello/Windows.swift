@@ -817,6 +817,8 @@ private struct AppearanceSettings: View {
                         settings.brutalColor = BrutalColor(rawValue: id) ?? .pink
                     }
                 }
+            case .cyanotype: CyanotypeSettings()
+            case .field: FieldSettings()
             }
 
             Section {

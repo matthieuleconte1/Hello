@@ -16,6 +16,10 @@ enum RevealStyle {
     case page
     /// Néo-brutal : le panneau tombe et rebondit sur son ombre, lignes qui sautent en place.
     case slam
+    /// Cyanotype : la table traçante dessine le cadre et les axes, puis les lignes arrivent sans rebond.
+    case plotter
+    /// Atelier Champ : l'instrument se met sous tension, cranté comme un encodeur.
+    case detent
 
     /// Ce qui caractérise le mouvement du style (affiché dans Réglages › Animations).
     var summary: String {
@@ -31,6 +35,8 @@ enum RevealStyle {
         case .page: "la feuille se déplie vers l'avant, les résultats glissent comme de l'encre et le marque-page suit la sélection."
         case .slam: "le panneau tombe et rebondit sur son ombre, les résultats sautent en place. Au lancement, il s'enfonce "
             + "comme un bouton qu'on presse."
+        case .plotter: CyanotypeLook.summary
+        case .detent: FieldLook.summary
         }
     }
 
@@ -43,6 +49,8 @@ enum RevealStyle {
         case .crt: "le faisceau balaie l'écran une fois, de haut en bas."
         case .page: "un trait d'encre se trace sous la recherche, puis sèche et s'efface."
         case .slam: "une ombre de la couleur de sélection claque sous le panneau, puis rentre sous l'ombre noire."
+        case .plotter: CyanotypeLook.effect
+        case .detent: FieldLook.effect
         }
     }
 
@@ -55,6 +63,8 @@ enum RevealStyle {
         case .crt: light ? .easeOut(duration: 0.1) : .timingCurve(0.2, 0.9, 0.3, 1, duration: 0.34)
         case .page: light ? .easeOut(duration: 0.14) : .spring(response: 0.48, dampingFraction: 0.84)
         case .slam: light ? .spring(response: 0.2, dampingFraction: 0.75) : .spring(response: 0.36, dampingFraction: 0.5)
+        case .plotter: CyanotypeLook.open(light: light)
+        case .detent: FieldLook.open(light: light)
         }
     }
 
@@ -67,6 +77,8 @@ enum RevealStyle {
         case .crt: .linear(duration: 0.06)
         case .page: .easeInOut(duration: 0.26)
         case .slam: .spring(response: 0.3, dampingFraction: 0.62)
+        case .plotter: CyanotypeLook.navigation
+        case .detent: FieldLook.navigation
         }
     }
 
@@ -88,6 +100,10 @@ enum RevealStyle {
             return .asymmetric(insertion: .offset(y: 8 * k).combined(with: .opacity), removal: .opacity)
         case .slam:
             return .asymmetric(insertion: .offset(x: 60 * k * side).combined(with: .opacity), removal: .opacity)
+        case .plotter:
+            return CyanotypeLook.modeTransition(forward: forward)
+        case .detent:
+            return FieldLook.modeTransition(forward: forward)
         }
     }
 
@@ -103,6 +119,8 @@ enum RevealStyle {
         case .crt: .linear(duration: 0.001).delay(0.2 + Double(min(order, 14)) * 0.045)
         case .page: .easeOut(duration: 0.34).delay(0.1 + n * 0.03)
         case .slam: .spring(response: 0.32, dampingFraction: 0.5).delay(0.14 + n * 0.03)
+        case .plotter: CyanotypeLook.row(order)
+        case .detent: FieldLook.row(order)
         }
     }
 
@@ -118,6 +136,8 @@ enum RevealStyle {
         case .crt: .easeIn(duration: 0.16)
         case .page: .easeIn(duration: 0.2)
         case .slam: .spring(response: 0.16, dampingFraction: 0.7)
+        case .plotter: CyanotypeLook.close
+        case .detent: FieldLook.close
         }
     }
 }
@@ -208,6 +228,10 @@ struct PanelMotion: ViewModifier {
                 .scaleEffect(hidden ? 1 + 0.04 * k : 1)
                 .rotationEffect(.degrees(hidden ? -1.5 * k : 0))
                 .opacity(hidden ? 0 : 1)
+        case .plotter:
+            content.modifier(CyanotypePanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
+        case .detent:
+            content.modifier(FieldPanelMotion(hidden: hidden, closing: closing, light: light, revealID: revealID))
         }
     }
 }
@@ -232,11 +256,15 @@ struct RevealItem: ViewModifier {
         case .crt: .zero
         case .page: CGSize(width: -10 * k, height: 0)
         case .slam: CGSize(width: 0, height: 14 * k)
+        case .plotter: CyanotypeLook.rowOffset
+        case .detent: FieldLook.rowOffset
         }
         let scale: CGFloat = switch reveal {
         case .unfold: 1 - 0.06 * k
         case .wave: 1 - 0.015 * k
         case .slam: 1 - 0.15 * k
+        case .plotter: CyanotypeLook.rowScale
+        case .detent: FieldLook.rowScale
         default: 1
         }
         content
@@ -324,6 +352,10 @@ struct OpeningEffect: View {
             case .brutal:
                 // Joué sous le panneau, avec l'ombre pleine (StampShadow).
                 EmptyView()
+            case .cyanotype:
+                PlotterTrace(trigger: trigger, size: size, radius: radius, tokens: tokens)
+            case .field:
+                MeterCalibrate(trigger: trigger, size: size, radius: radius, tokens: tokens)
             }
         }
     }

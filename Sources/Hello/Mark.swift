@@ -64,6 +64,10 @@ struct HelloMark: View {
         case paper(ink: Color, dot: Color)
         /// Néo-brutal : anneau rose cerclé de noir, point jaune.
         case brutal(Color)
+        /// Cyanotype : l'anneau tracé au trait fin, comme sur un plan ; le point est une mire.
+        case cyanotype(ink: Color, accent: Color)
+        /// Atelier Champ : anneau d'encre, point en voyant.
+        case field(ink: Color, dot: Color)
     }
 
     var skin: Skin
@@ -109,6 +113,10 @@ struct HelloMark: View {
                 trimmed.stroke(Color.black, style: StrokeStyle(lineWidth: line * 1.3, lineCap: .round))
                 trimmed.stroke(color, style: style)
             }
+        case .cyanotype(let ink, let accent):
+            CyanotypeMarkRing(progress: progress, line: line, ink: ink, accent: accent)
+        case .field(let ink, let dot):
+            FieldMarkRing(progress: progress, line: line, ink: ink, dot: dot)
         }
     }
 
@@ -132,6 +140,10 @@ struct HelloMark: View {
             Circle().fill(Color(hex: "#FFD84D"))
                 .frame(width: 2 * r, height: 2 * r)
                 .overlay(Circle().strokeBorder(Color.black, lineWidth: line * 0.3).padding(-line * 0.15))
+        case .cyanotype(let ink, let accent):
+            CyanotypeMarkDot(radius: r, line: line, ink: ink, accent: accent)
+        case .field(let ink, let dot):
+            FieldMarkDot(radius: r, line: line, ink: ink, dot: dot)
         }
     }
 

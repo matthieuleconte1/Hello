@@ -315,10 +315,27 @@ final class AppSettings: ObservableObject {
         didSet { Self.d.set(brutalColor.rawValue, forKey: "brutalColor") }
     }
 
+    // Cyanotype (réglages décrits dans StyleCyanotype.swift)
+    @Published var cyanotypeTone = CyanotypeTone(rawValue: value("cyanotypeTone", "prussian")) ?? .prussian {
+        didSet { Self.d.set(cyanotypeTone.rawValue, forKey: "cyanotypeTone") }
+    }
+    /// Icônes d'apps dessinées au trait (sinon : en lavis bleu, sans traits).
+    @Published var cyanotypeLines = value("cyanotypeLines", true) { didSet { Self.d.set(cyanotypeLines, forKey: "cyanotypeLines") } }
+    /// Détail des traits des icônes : 0, seulement les grandes formes ; 1, tout ce qui contraste.
+    @Published var cyanotypeLineDetail = value("cyanotypeLineDetail", 0.55) {
+        didSet { Self.d.set(cyanotypeLineDetail, forKey: "cyanotypeLineDetail") }
+    }
+
+    // Atelier Champ (réglages décrits dans StyleField.swift)
+    @Published var fieldFinish = FieldFinish(rawValue: value("fieldFinish", "auto")) ?? .auto {
+        didSet { Self.d.set(fieldFinish.rawValue, forKey: "fieldFinish") }
+    }
+
     /// Tout ce qui change l'aspect du champ de recherche (police, couleurs) : il ne se reconfigure que si ça change.
     var styleSignature: String {
         [panelStyle.rawValue, atelierPalette.rawValue, "\(atelierSwap)", atelierAppearance.rawValue,
-         glyphAccent.rawValue, glyphEffectiveAppearance.rawValue, "\(glyphNightLevel)", phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
+         glyphAccent.rawValue, glyphEffectiveAppearance.rawValue, "\(glyphNightLevel)", phosphorColor.rawValue, paperTone.rawValue, brutalColor.rawValue,
+         cyanotypeTone.rawValue, fieldFinish.rawValue, "\(textScale)", "\(StyleTokens.systemIsDark)"]
             .joined(separator: "|")
     }
 
@@ -472,6 +489,10 @@ final class AppSettings: ObservableObject {
         phosphorColor = .green
         paperTone = .cream
         brutalColor = .pink
+        cyanotypeTone = .prussian
+        cyanotypeLines = true
+        cyanotypeLineDetail = 0.55
+        fieldFinish = .auto
     }
 
     func apply(_ preset: LookPreset) {

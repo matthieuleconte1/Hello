@@ -4,7 +4,7 @@ import SwiftUI
 /// Direction artistique du panneau. « Verre » suit les réglages de verre (matériau, teinte, surlignage) ;
 /// les autres sont des styles complets : fond, typographie, sélection, touches, icônes et mouvement.
 enum PanelStyle: String, CaseIterable, Identifiable {
-    case glass, atelier, glyph, phosphor, paper, brutal
+    case glass, atelier, glyph, phosphor, paper, brutal, cyanotype, field
     var id: String { rawValue }
 
     var title: String {
@@ -15,6 +15,8 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .phosphor: "Phosphore"
         case .paper: "Papier"
         case .brutal: "Néo-brutal"
+        case .cyanotype: "Cyanotype"
+        case .field: "Atelier Champ"
         }
     }
 
@@ -26,6 +28,8 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .phosphor: "Écran cathodique et caractères en chasse fixe."
         case .paper: "Papier, titres à empattements et filets fins."
         case .brutal: "Contours noirs, ombres pleines et couleurs franches."
+        case .cyanotype: CyanotypeLook.detail
+        case .field: FieldLook.detail
         }
     }
 
@@ -37,6 +41,8 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .phosphor: "terminal.fill"
         case .paper: "book.closed.fill"
         case .brutal: "square.stack.3d.down.forward.fill"
+        case .cyanotype: CyanotypeLook.symbol
+        case .field: FieldLook.symbol
         }
     }
 
@@ -51,6 +57,8 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .phosphor: .crt
         case .paper: .page
         case .brutal: .slam
+        case .cyanotype: .plotter
+        case .field: .detent
         }
     }
 }
@@ -140,12 +148,14 @@ struct StyleTokens {
         case inset(frame: Color, pane: Color)
     }
 
-    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized, label }
+    enum HeaderStyle { case plain, kicker, comment, serifItalic, emphasized, label, blueprint }
     enum TileStyle {
         case tinted, cookie, outline, bordered
         /// Carré aux coins doux qui s'arrondissent et prennent l'accent une fois choisi (Glyphe).
         /// `stroke` : pastille au trait (la Nuit, où « trait plein = disponible, rempli = choisi »).
         case glyph(rest: Color, ink: Color, selected: Color, selectedInk: Color, stroke: Color?)
+        /// Pastille dessinée par le décor du style (`Decor`).
+        case decor
     }
     enum SearchMark { case logo, symbol(String), prompt(String) }
 
@@ -240,6 +250,17 @@ struct StyleTokens {
     var coloredSelection = false
     /// Curseur bloc qui clignote devant la ligne sélectionnée (Phosphore).
     var blinkingCursor = false
+    /// Couleur des traits intérieurs de l'icône choisie, quand elle est au trait ; nil : noir si `iconTint`, sinon l'encre.
+    var iconLineSelected: Color?
+    /// Ce que le style dessine en plus, par-dessus les composants partagés (voir `Decor`).
+    var decor: Decor = .none
+
+    /// Décor propre à un style : chaque style le dessine dans son fichier (StyleCyanotype.swift, StyleField.swift).
+    enum Decor {
+        case none
+        case cyanotype(CyanotypeDecor)
+        case field(FieldDecor)
+    }
 
     static var current: StyleTokens { AppSettings.shared.panelStyle.tokens }
 
@@ -312,6 +333,7 @@ struct StyleTokens {
         case .plain, .serifItalic, .emphasized: text
         case .kicker, .label: text.uppercased()
         case .comment: "// " + text.lowercased()
+        case .blueprint: "[ " + text.uppercased() + " ]"
         }
     }
 
@@ -322,7 +344,7 @@ struct StyleTokens {
         case .comment: .system(size: 11, weight: .regular, design: .monospaced)
         case .serifItalic: .system(size: 12.5, weight: .regular, design: .serif).italic()
         case .emphasized: font(12.5, .bold, width: 112)
-        case .label: .system(size: 10.5, weight: .medium, design: .monospaced)
+        case .label, .blueprint: .system(size: 10.5, weight: .medium, design: .monospaced)
         }
     }
 
@@ -330,6 +352,7 @@ struct StyleTokens {
         switch header {
         case .kicker: 1.2
         case .label: 0.7
+        case .blueprint: 1.4
         default: 0
         }
     }
@@ -344,6 +367,8 @@ struct StyleTokens {
         case .phosphor: phosphor(AppSettings.shared.phosphorColor)
         case .paper: paper(AppSettings.shared.paperTone)
         case .brutal: brutal(AppSettings.shared.brutalColor)
+        case .cyanotype: CyanotypeLook.tokens
+        case .field: FieldLook.tokens
         }
     }
 
@@ -605,6 +630,7 @@ extension View {
                         shape.strokeBorder(border.color, lineWidth: border.width).allowsHitTesting(false)
                     }
                 }
+                .overlay { DecorSurface(decor: style.decor, radius: radius) }
         }
     }
 
@@ -613,7 +639,11 @@ extension View {
     func styledPane(_ style: StyleTokens, panelRadius: CGFloat) -> some View {
         if case .inset(_, let pane) = style.surface {
             let shape = RoundedRectangle(cornerRadius: max(panelRadius - 8, 8), style: .continuous)
-            background(shape.fill(pane)).clipShape(shape)
+            background {
+                shape.fill(pane)
+                    .overlay { DecorPane(decor: style.decor, radius: max(panelRadius - 8, 8)) }
+            }
+                .clipShape(shape)
                 .overlay {
                     if let border = style.paneBorder {
                         shape.strokeBorder(border, lineWidth: 1).allowsHitTesting(false)
@@ -783,6 +813,8 @@ struct SymbolTile: View {
                 .padding(1)
                 .scaleEffect(selected ? 1.06 : 1)
                 .animation(Motion.scaled(StyleTokens.Glyph.spring), value: selected)
+        case .decor:
+            DecorTile(decor: style.decor, name: name, tint: tint, selected: selected)
         }
     }
 }
@@ -818,7 +850,8 @@ struct AppIconImage: View {
             .overlay {
                 if kind != nil, let drawing = outline.image {
                     Image(nsImage: drawing).renderingMode(.template).resizable().interpolation(.high)
-                        .foregroundStyle(selected && style.iconTint != nil ? Color.black.opacity(0.85) : style.ink)
+                        .foregroundStyle(selected ? style.iconLineSelected ?? (style.iconTint != nil ? Color.black.opacity(0.85) : style.ink)
+                                         : style.ink)
                         .allowsHitTesting(false)
                 }
             }
@@ -1132,6 +1165,8 @@ struct StyleCard: View {
         case .phosphor: Color(hex: "#0B130D")
         case .paper: Color(hex: "#D9CFBF")
         case .brutal: Color(hex: "#7FD1FF")
+        case .cyanotype: CyanotypeLook.backdrop
+        case .field: FieldLook.backdrop
         }
     }
 }
@@ -1166,5 +1201,79 @@ struct PaletteSwatch: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Décor des styles
+
+/// Aiguillage du décor vers le fichier de chaque style. Rien n'est dessiné pour `.none`.
+struct DecorSurface: View {
+    let decor: StyleTokens.Decor
+    let radius: CGFloat
+
+    var body: some View {
+        switch decor {
+        case .none: EmptyView()
+        case .cyanotype(let d): CyanotypeSurface(decor: d, radius: radius)
+        case .field(let d): FieldSurface(decor: d, radius: radius)
+        }
+    }
+}
+
+/// Sur le fond du panneau intérieur, sous le contenu.
+struct DecorPane: View {
+    let decor: StyleTokens.Decor
+    let radius: CGFloat
+
+    var body: some View {
+        switch decor {
+        case .none: EmptyView()
+        case .cyanotype(let d): CyanotypePane(decor: d, radius: radius)
+        case .field(let d): FieldPane(decor: d, radius: radius)
+        }
+    }
+}
+
+/// Par-dessus le surlignage de la ligne choisie.
+struct DecorSelection: View {
+    let decor: StyleTokens.Decor
+    let radius: CGFloat
+
+    var body: some View {
+        switch decor {
+        case .none: EmptyView()
+        case .cyanotype(let d): CyanotypeSelection(decor: d, radius: radius)
+        case .field(let d): FieldSelection(decor: d, radius: radius)
+        }
+    }
+}
+
+/// Par-dessus un séparateur (en-tête, pied de page, aperçu).
+struct DecorDivider: View {
+    let decor: StyleTokens.Decor
+    let vertical: Bool
+
+    var body: some View {
+        switch decor {
+        case .none: EmptyView()
+        case .cyanotype(let d): CyanotypeDivider(decor: d, vertical: vertical)
+        case .field(let d): FieldDivider(decor: d, vertical: vertical)
+        }
+    }
+}
+
+/// Pastille d'un symbole (`TileStyle.decor`).
+struct DecorTile: View {
+    let decor: StyleTokens.Decor
+    let name: String
+    let tint: Color
+    let selected: Bool
+
+    var body: some View {
+        switch decor {
+        case .none: EmptyView()
+        case .cyanotype(let d): CyanotypeTile(decor: d, name: name, tint: tint, selected: selected)
+        case .field(let d): FieldTile(decor: d, name: name, tint: tint, selected: selected)
+        }
     }
 }
