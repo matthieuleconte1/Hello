@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/matthieuleconte1/Hello/releases/latest"><b>Télécharger la 2.1</b></a> ·
+  <a href="https://github.com/matthieuleconte1/Hello/releases/latest"><b>Télécharger la 2.2</b></a> ·
   <a href="https://matthieuleconte1.github.io/Hello/">Site et démo en ligne</a> ·
   <a href="#ce-que-fait-hello">Fonctionnalités</a> ·
   <a href="#huit-peaux">Huit peaux</a> ·
