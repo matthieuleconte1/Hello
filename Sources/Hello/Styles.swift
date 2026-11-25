@@ -1269,10 +1269,8 @@ struct StyleCard: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 7) {
-                ZStack {
-                    StyleCard.backdrop(style)
-                    StyleSample(style: style, scale: 0.3)
-                }
+                // Vignette dessinée : une illustration du style, pas une miniature du panneau.
+                StyleArt(style: style)
                 .frame(height: 84)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay {

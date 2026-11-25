@@ -135,6 +135,7 @@ struct LacquerDecor {
     var tileSelectedFill: Color
     var kintsugi: Bool
     var sheen: Bool
+    var grain = true
 }
 
 enum LacquerLook {
@@ -152,7 +153,7 @@ enum LacquerLook {
     /// Ce qui change l'aspect du champ de recherche.
     static var signature: String {
         let s = AppSettings.shared
-        return "\(s.lacquerMode.rawValue)|\(s.lacquerKintsugi)|\(s.lacquerSheen)"
+        return "\(s.lacquerMode.rawValue)|\(s.lacquerKintsugi)|\(s.lacquerSheen)|\(s.lacquerGrain)"
     }
 
     /// « Réinitialiser l'apparence » : remet les réglages de la peau par défaut.
@@ -160,6 +161,7 @@ enum LacquerLook {
         s.lacquerMode = .auto
         s.lacquerKintsugi = true
         s.lacquerSheen = true
+        s.lacquerGrain = true
     }
 
     static var tokens: StyleTokens {
@@ -179,7 +181,8 @@ enum LacquerLook {
             tileRestFill: p.tileRestFill,
             tileSelectedFill: p.tileSelectedFill,
             kintsugi: settings.lacquerKintsugi,
-            sheen: settings.lacquerSheen
+            sheen: settings.lacquerSheen,
+            grain: settings.lacquerGrain
         )
 
         return StyleTokens(
@@ -448,9 +451,9 @@ private enum LacquerTextures {
     /// Urushi poli au charbon (reliefs dorés chauds) ou porcelaine mate (creux minéraux).
     static func grain(dark: Bool) -> NSImage {
         Grain.tile(dark
-            ? Grain.Spec(amount: 0.075, light: .init(r: 1.0, g: 0.86, b: 0.62), lightShare: 0.75, specks: 0.002,
+            ? Grain.Spec(amount: 0.05, light: .init(r: 1.0, g: 0.86, b: 0.62), lightShare: 0.75, specks: 0.002,
                          seed: 0x3F82_D109_A6C4_7E5B)
-            : Grain.Spec(amount: 0.07, shadow: .init(r: 0.22, g: 0.18, b: 0.14), lightShare: 0.5, specks: 0.005,
+            : Grain.Spec(amount: 0.045, shadow: .init(r: 0.22, g: 0.18, b: 0.14), lightShare: 0.5, specks: 0.005,
                          seed: 0x9C41_8B23_E5D0_4A17))
     }
 
@@ -603,6 +606,7 @@ struct LacquerSurface: View {
             // Grain satiné imperceptible qui donne de la matière à la laque ou à la porcelaine mate.
             Rectangle()
                 .fill(ImagePaint(image: Image(nsImage: LacquerTextures.grain(dark: decor.dark))))
+                .opacity(decor.grain ? 1 : 0)
                 .clipShape(shape)
 
             // Lustre satiné à peine visible en haut du panneau, profondeur veloutée vers le bas.
@@ -664,6 +668,7 @@ struct LacquerPane: View {
         ZStack {
             Rectangle()
                 .fill(ImagePaint(image: Image(nsImage: LacquerTextures.grain(dark: decor.dark))))
+                .opacity(decor.grain ? 1 : 0)
 
             if decor.sheen {
                 LinearGradient(
@@ -990,6 +995,7 @@ struct LacquerSettings: View {
             .pickerStyle(.segmented)
             Toggle("Veine d'or kintsugi", isOn: $settings.lacquerKintsugi)
             Toggle("Lustre satiné", isOn: $settings.lacquerSheen)
+            Toggle("Grain de la laque", isOn: $settings.lacquerGrain)
         } header: {
             Text("Laque")
         } footer: {

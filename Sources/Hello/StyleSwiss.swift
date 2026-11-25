@@ -55,6 +55,7 @@ struct SwissDecor {
     var accent: Color
     var grid: Bool
     var monoIcons: Bool
+    var grain = false
 }
 
 enum SwissLook {
@@ -73,7 +74,7 @@ enum SwissLook {
     /// Ce qui change l'aspect du champ de recherche.
     static var signature: String {
         let s = AppSettings.shared
-        return "\(s.swissMode.rawValue)|\(s.swissGrid)"
+        return "\(s.swissMode.rawValue)|\(s.swissGrid)|\(s.swissGrain)"
     }
 
     /// « Réinitialiser l'apparence » : remet les réglages de la peau par défaut.
@@ -81,6 +82,7 @@ enum SwissLook {
         s.swissMode = .auto
         s.swissGrid = true
         s.swissMonoIcons = true
+        s.swissGrain = false
     }
 
     static var tokens: StyleTokens {
@@ -144,7 +146,8 @@ enum SwissLook {
                 secondary: secondary,
                 accent: accent,
                 grid: settings.swissGrid,
-                monoIcons: settings.swissMonoIcons
+                monoIcons: settings.swissMonoIcons,
+                grain: settings.swissGrain
             ))
         )
     }
@@ -324,8 +327,8 @@ struct SwissOpening: View {
 private enum SwissTextures {
     static func matte(dark: Bool) -> NSImage {
         Grain.tile(dark
-            ? Grain.Spec(amount: 0.085, lightShare: 0.9, specks: 0.002, seed: 0x2F19_8C4A_9103_E6B1)
-            : Grain.Spec(amount: 0.07, shadow: .init(r: 0.10, g: 0.09, b: 0.08), lightShare: 0.55, specks: 0.004,
+            ? Grain.Spec(amount: 0.05, lightShare: 0.9, specks: 0.002, seed: 0x2F19_8C4A_9103_E6B1)
+            : Grain.Spec(amount: 0.04, shadow: .init(r: 0.10, g: 0.09, b: 0.08), lightShare: 0.55, specks: 0.004,
                          seed: 0x7B4E_12D8_3C5A_09F3))
     }
 }
@@ -358,6 +361,7 @@ struct SwissSurface: View {
                 // Grain mat très discret (émail de panneau / papier couché mat).
                 Rectangle()
                     .fill(ImagePaint(image: Image(nsImage: SwissTextures.matte(dark: decor.dark))))
+                    .opacity(decor.grain ? 1 : 0)
 
                 // Grille typographique suisse : marge extérieure de la zone de contenu (8 pt), gouttière icône/titre (49,5 pt),
                 // et colonne dédiée aux accessoires de droite (w - 110 pt). Aucun filet ne touche un glyphe ni une icône.
@@ -585,6 +589,7 @@ struct SwissSettings: View {
             }
             .pickerStyle(.segmented)
             Toggle("Grille typographique", isOn: $settings.swissGrid)
+            Toggle("Grain du papier", isOn: $settings.swissGrain)
             Toggle("Icônes en noir et blanc", isOn: $settings.swissMonoIcons)
         } header: {
             Text("Atelier Suisse")

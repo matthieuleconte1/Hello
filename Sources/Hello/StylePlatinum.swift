@@ -401,9 +401,6 @@ struct PlatinumSurface: View {
             let stripePadV: CGFloat = full ? 9 : max(2, 5 * (h / 190.0))
 
             ZStack(alignment: .topLeading) {
-                // Plastique gris moulé : grain mat très fin, comme le boîtier d'un Mac beige.
-                GrainLayer(spec: Grain.Spec(amount: decor.dark ? 0.07 : 0.06, lightShare: 0.7, specks: 0.002,
-                                            seed: decor.dark ? 0x44C1_09E3 : 0x17AB_5D20))
                 // Rayures horizontales (pinstripes) dans l'en-tête, façon barre de titre Mac OS 8/9.
                 if decor.pinstripes && headerH >= 14 {
                     let stripeW = max(0, w - 2 * stripePadH)

@@ -289,11 +289,11 @@ private enum EInkTextures {
 
     /// Microcapsules de la dalle : grain minéral net, plus franc sur le bord mat.
     static func slabGrain(dark: Bool) -> NSImage {
-        Grain.tile(Grain.Spec(amount: dark ? 0.10 : 0.11, lightShare: dark ? 0.7 : 0.5, specks: 0.008,
+        Grain.tile(Grain.Spec(amount: dark ? 0.065 : 0.07, lightShare: dark ? 0.7 : 0.5, specks: 0.003,
                               seed: dark ? 0x6E31_9D4B_2A87_C513 : 0x4C7A_E109_8F32_B6D1))
     }
     static func bezelGrain(dark: Bool) -> NSImage {
-        Grain.tile(Grain.Spec(amount: dark ? 0.12 : 0.14, lightShare: 0.6, specks: 0.01,
+        Grain.tile(Grain.Spec(amount: dark ? 0.08 : 0.09, lightShare: 0.6, specks: 0.004,
                               seed: dark ? 0x91B4_3C2F_7D50_E8A9 : 0x2F85_A61C_D904_73E5))
     }
     static func bayerTile(dark: Bool) -> NSImage { dark ? bayerLightNight : bayerLightDay }

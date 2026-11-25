@@ -350,6 +350,19 @@ final class AppSettings: ObservableObject {
         didSet { Self.d.set(swissMode.rawValue, forKey: "swissMode") }
     }
     /// Grille typographique visible par des filets fins et repères de colonnes.
+    /// Grain de matière, par peau (la Suisse n'en avait pas : désactivé par défaut).
+    @Published var swissGrain = value("swissGrain", false) {
+        didSet { Self.d.set(swissGrain, forKey: "swissGrain") }
+    }
+    @Published var lacquerGrain = value("lacquerGrain", true) {
+        didSet { Self.d.set(lacquerGrain, forKey: "lacquerGrain") }
+    }
+    @Published var fieldGrain = value("fieldGrain", true) {
+        didSet { Self.d.set(fieldGrain, forKey: "fieldGrain") }
+    }
+    @Published var risoGrain = value("risoGrain", true) {
+        didSet { Self.d.set(risoGrain, forKey: "risoGrain") }
+    }
     @Published var swissGrid = value("swissGrid", true) {
         didSet { Self.d.set(swissGrid, forKey: "swissGrid") }
     }
@@ -585,6 +598,7 @@ final class AppSettings: ObservableObject {
         fieldFinish = .auto
         fieldGraduations = true
         fieldEncoderColors = true
+        fieldGrain = true
         SwissLook.resetSettings(self)
         PlatinumLook.resetSettings(self)
         EInkLook.resetSettings(self)

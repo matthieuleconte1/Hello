@@ -54,6 +54,7 @@ struct RisoDecor {
     var accent: Color
     var secondary: Color
     var halftone: Bool
+    var grain = true
 }
 
 enum RisoLook {
@@ -72,7 +73,7 @@ enum RisoLook {
     /// Ce qui change l'aspect du champ de recherche.
     static var signature: String {
         let s = AppSettings.shared
-        return "\(s.risoMode.rawValue)|\(s.risoHalftone)|\(s.risoDuotoneIcons)"
+        return "\(s.risoMode.rawValue)|\(s.risoHalftone)|\(s.risoDuotoneIcons)|\(s.risoGrain)"
     }
 
     /// « Réinitialiser l'apparence » : remet les réglages de la peau par défaut.
@@ -80,6 +81,7 @@ enum RisoLook {
         s.risoMode = .auto
         s.risoHalftone = true
         s.risoDuotoneIcons = true
+        s.risoGrain = true
     }
 
     static var tokens: StyleTokens {
@@ -151,7 +153,8 @@ enum RisoLook {
                 blue: blue,
                 accent: pink,
                 secondary: secondary,
-                halftone: settings.risoHalftone
+                halftone: settings.risoHalftone,
+                grain: settings.risoGrain
             ))
         )
     }
@@ -350,7 +353,7 @@ private enum RisoTextures {
                 let n2 = hash(x / 4, y / 4, dark ? 137 : 43)
                 let combined = n1 * 0.66 + n2 * 0.34
                 let centered = (combined - 0.5) * 2.0
-                let strength = abs(centered) * (dark ? 0.11 : 0.12) * (centered > 0 ? 0.7 : 1)
+                let strength = abs(centered) * (dark ? 0.075 : 0.08) * (centered > 0 ? 0.7 : 1)
                 let idx = (y * px + x) * 4
                 let a = UInt8(min(max(strength * 255.0, 0), 255))
                 if dark {
@@ -474,6 +477,7 @@ struct RisoSurface: View {
         ZStack {
             Rectangle()
                 .fill(ImagePaint(image: Image(nsImage: RisoTextures.paper(dark: decor.dark))))
+                .opacity(decor.grain ? 1 : 0)
             LinearGradient(
                 colors: [
                     decor.blue.opacity(decor.dark ? 0.04 : 0.025),
@@ -498,6 +502,7 @@ struct RisoPane: View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Rectangle()
             .fill(ImagePaint(image: Image(nsImage: RisoTextures.paper(dark: decor.dark))))
+                .opacity(decor.grain ? 1 : 0)
             .clipShape(shape)
             .allowsHitTesting(false)
     }
@@ -713,6 +718,7 @@ struct RisoSettings: View {
             .pickerStyle(.segmented)
             Toggle("Trame demi-teinte", isOn: $settings.risoHalftone)
             Toggle("Icônes en bichromie", isOn: $settings.risoDuotoneIcons)
+            Toggle("Grain du papier recyclé", isOn: $settings.risoGrain)
         } header: {
             Text("Riso")
         } footer: {

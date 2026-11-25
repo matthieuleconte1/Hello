@@ -84,6 +84,7 @@ struct FieldDecor {
     var accent: Color
     var graduations: Bool
     var encoderColors: Bool
+    var grain = true
 }
 
 enum FieldLook {
@@ -139,7 +140,8 @@ enum FieldLook {
             motion: .timingCurve(0.2, 0.9, 0.25, 1, duration: 0.11),
             decor: .field(FieldDecor(dark: dark, ink: ink, accent: accent,
                                      graduations: settings.fieldGraduations,
-                                     encoderColors: settings.fieldEncoderColors)))
+                                     encoderColors: settings.fieldEncoderColors,
+                                     grain: settings.fieldGrain)))
     }
 
     /// Fond de studio qui détache le châssis : ardoise sombre derrière l'aluminium clair, béton satiné derrière l'OLED.
@@ -290,7 +292,7 @@ private enum FieldTextures {
 
     /// Aluminium microbillé : grain isotrope serré, sans strie.
     static func bead(dark: Bool) -> NSImage {
-        Grain.tile(Grain.Spec(amount: dark ? 0.085 : 0.09, lightShare: dark ? 0.8 : 1.0, specks: 0.0015,
+        Grain.tile(Grain.Spec(amount: dark ? 0.06 : 0.065, lightShare: dark ? 0.8 : 1.0, specks: 0.0015,
                               seed: dark ? 0x51A7_9E23_B401_D3F7 : 0xA93C_41F0_7E2D_8B15))
     }
     static func scale(dark: Bool) -> NSImage { dark ? scaleDark : scaleLight }
@@ -335,6 +337,7 @@ struct FieldSurface: View {
         ZStack {
             Rectangle()
                 .fill(ImagePaint(image: Image(nsImage: FieldTextures.bead(dark: decor.dark))))
+                .opacity(decor.grain ? 1 : 0)
                 .clipShape(outer)
             // Le microbillage diffuse la lumière : un très léger dégradé du haut vers le bas, jamais un reflet.
             outer.fill(LinearGradient(colors: [Color.white.opacity(decor.dark ? 0.035 : 0.20), .clear,
@@ -609,6 +612,7 @@ struct FieldSettings: View {
             .pickerStyle(.segmented)
             Toggle("Échelles pointillées", isOn: $settings.fieldGraduations)
             Toggle("Quatre couleurs d'encodeurs", isOn: $settings.fieldEncoderColors)
+            Toggle("Grain microbillé", isOn: $settings.fieldGrain)
         } header: {
             Text("Atelier Champ")
         } footer: {
