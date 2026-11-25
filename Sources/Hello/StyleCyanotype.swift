@@ -284,7 +284,7 @@ struct CyanotypeSurface: View {
     var body: some View {
         ZStack {
             CyanotypePaper.fill(CyanotypePaper.grain, decor.grain)
-            CropMarks(inset: 11, arm: 3.5)
+            CropMarks(inset: 7.5, arm: 3)
                 .stroke(decor.ink.opacity(0.45), lineWidth: 0.75)
         }
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))

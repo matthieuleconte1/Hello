@@ -623,7 +623,8 @@ extension View {
         case .glass:
             glassPanel(cornerRadius: radius)
         case .solid(let color), .inset(let color, _):
-            background(shape.fill(color))
+            // Le décor du cadre (grain, chanfrein, repères) se pose sur le fond, sous le contenu.
+            background(shape.fill(color).overlay { DecorSurface(decor: style.decor, radius: radius) })
                 .overlay {
                     if style.scanlines { Scanlines().clipShape(shape) }
                 }
@@ -632,7 +633,6 @@ extension View {
                         shape.strokeBorder(border.color, lineWidth: border.width).allowsHitTesting(false)
                     }
                 }
-                .overlay { DecorSurface(decor: style.decor, radius: radius) }
         }
     }
 

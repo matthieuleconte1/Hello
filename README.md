@@ -11,7 +11,7 @@
   <a href="https://github.com/matthieuleconte1/Hello/releases/latest"><b>Télécharger la 2.1</b></a> ·
   <a href="https://matthieuleconte1.github.io/Hello/">Site et démo en ligne</a> ·
   <a href="#ce-que-fait-hello">Fonctionnalités</a> ·
-  <a href="#six-peaux">Six peaux</a> ·
+  <a href="#huit-peaux">Huit peaux</a> ·
   <a href="#installation">Installation</a>
 </p>
 
@@ -65,9 +65,9 @@ Les réponses de l’IA s’affichent en Markdown, avec tableaux et formules LaT
 
 Dans une conversation IA, deux pressions distinctes sur **Échap** en moins de 2,5 secondes arrêtent la réponse en cours ou reviennent à la recherche si elle est terminée. Une saisie en cours est d’abord effacée. **⌘W** masque Hello et laisse l’IA travailler.
 
-## Six peaux
+## Huit peaux
 
-Le même lanceur, six directions artistiques complètes. Chacune a ses couleurs, sa typographie, sa sélection, ses icônes et **ses propres animations**.
+Le même lanceur, huit directions artistiques complètes. Chacune a ses couleurs, sa typographie, sa sélection, ses icônes et **ses propres animations**.
 
 <table>
   <tr>
@@ -90,6 +90,8 @@ Le même lanceur, six directions artistiques complètes. Chacune a ses couleurs,
 | **Phosphore** | écran cathodique en chasse fixe, vert, ambre, blanc ou cyan | allumage du tube, balayage, résultats affichés ligne par ligne |
 | **Papier** | papier crème, ivoire ou nuit, titres à empattements | la page se déplie, un trait d'encre se trace sous la recherche |
 | **Néo-brutal** | contours noirs, ombres pleines, couleurs franches | le panneau tombe et rebondit sur son ombre |
+| **Cyanotype** | plan d'architecte en bleu de Prusse, calque ou encre de nuit : papier millimétré, cartouche à double filet, crochets de visée autour de la ligne choisie, icônes d'apps dessinées au trait qui se remplissent d'un lavis | une table traçante dessine le cartouche et les axes, plume en tête |
+| **Atelier Champ** | le design system Field de Teenage Engineering : châssis d'aluminium (ou noir OLED), écran encastré, séparateurs gradués, encodeurs aux quatre couleurs qui tournent d'un cran, voyant LED sur la ligne choisie | un VU-mètre aux quatre couleurs se calibre sous la recherche |
 
 Tout se règle dans **Réglages › Apparence** et **Réglages › Animations** : intensité et vitesse des animations, densité des lignes, taille du texte, et un **mode focus** qui n'affiche que la barre de recherche à l'ouverture.
 
@@ -142,7 +144,8 @@ Environ 15 000 lignes de Swift, sans dépendance, dans un Swift Package (pas de 
 | `Controller.swift` | la fenêtre flottante, le raccourci, l'ouverture et la fermeture |
 | `LauncherModel.swift` | les modes, la recherche, le clavier, les actions |
 | `Views.swift` | le panneau en SwiftUI : liste, grille d'apps, aperçus, terminal |
-| `Styles.swift`, `Motion.swift`, `Mark.swift` | les six peaux, leurs animations, le logo |
+| `Styles.swift`, `Motion.swift`, `Mark.swift` | les huit peaux, leurs animations, le logo |
+| `StyleCyanotype.swift`, `StyleField.swift` | tout ce qui est propre au Cyanotype et à Atelier Champ (jetons, décor, mouvement, réglages) |
 | `Windows.swift` | réglages façon Réglages Système et accueil |
 | `AppIndex.swift`, `Usage.swift` | index des apps, frécence et apprentissage |
 | `Shell.swift`, `Terminal.swift` | commandes shell, pseudo-terminal, dossiers, ports, processus |
