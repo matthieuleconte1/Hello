@@ -162,6 +162,26 @@ enum WindowManager {
         present(window)
     }
 
+    private static var newStylesWindow: NSWindow?
+
+    /// Présentation des styles arrivés avec la mise à jour.
+    static func showNewStyles() {
+        Controller.shared.hide()
+        newStylesWindow?.close()
+        let styles = AppSettings.shared.newStyles
+        guard !styles.isEmpty else { return }
+        let window = makeWindow(size: NSSize(width: 460, height: 420), content: NewStylesView(styles: styles))
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        newStylesWindow = window
+        present(window)
+    }
+
+    static func closeNewStyles() {
+        newStylesWindow?.close()
+        newStylesWindow = nil
+    }
+
     static func closeOnboarding() {
         onboardingWindow?.close()
         onboardingWindow = nil
@@ -443,6 +463,8 @@ struct OnboardingView: View {
 
     private func finish() {
         settings.onboarded = true
+        // Première installation : tous les styles sont neufs, rien à annoncer.
+        settings.markStylesSeen()
         WindowManager.closeOnboarding()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { Controller.shared.show() }
     }

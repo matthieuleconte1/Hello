@@ -806,6 +806,7 @@ final class LauncherModel: ObservableObject {
 
     private func suggestions() -> [ResultItem] {
         var out: [ResultItem] = updateItem().map { [$0] } ?? []
+        if let item = newStylesItem() { out.append(item) }
         let apps = Dictionary(c.apps.apps.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let allCommands = commands
         let byID = Dictionary(allCommands.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })

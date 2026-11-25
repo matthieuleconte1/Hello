@@ -208,6 +208,13 @@ final class AppSettings: ObservableObject {
     @Published var hotkeyID = value("hotkey", "cmd-space") { didSet { Self.d.set(hotkeyID, forKey: "hotkey") } }
     @Published var statsRevision = 0
     @Published var onboarded = value("onboarded", false) { didSet { Self.d.set(onboarded, forKey: "onboarded") } }
+    /// Styles déjà présentés. Absent : ceux d'avant la présentation des nouveautés (les autres seront annoncés).
+    @Published var seenStyles = value("seenStyles", ["glass", "atelier", "glyph", "phosphor", "paper", "brutal"]) {
+        didSet { Self.d.set(seenStyles, forKey: "seenStyles") }
+    }
+    /// Styles arrivés avec une mise à jour et pas encore présentés.
+    var newStyles: [PanelStyle] { PanelStyle.allCases.filter { !seenStyles.contains($0.rawValue) } }
+    func markStylesSeen() { seenStyles = PanelStyle.allCases.map(\.rawValue) }
     @Published var showMenuBarIcon = value("showMenuBarIcon", true) {
         didSet {
             Self.d.set(showMenuBarIcon, forKey: "showMenuBarIcon")
