@@ -1327,7 +1327,7 @@ struct AgentView: View {
         if !run.context.accessibility, run.steps.contains(where: { $0.contains("osascript") }), !AXIsProcessTrusted() {
             HStack(spacing: 10) {
                 Image(systemName: "accessibility").foregroundStyle(.blue)
-                Text("L'IA n'a pas pu piloter l'app : Hello n'a pas l'accessibilité (macOS l'oublie après une mise à jour).")
+                Text("L'IA n'a pas pu piloter l'app : Hello n'a pas l'accessibilité.")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Button("Autoriser…") { PermissionCenter.shared.requestAccessibility() }

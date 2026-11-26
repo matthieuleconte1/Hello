@@ -40,8 +40,20 @@ cp "$BIN" "$APP/Contents/MacOS/Hello"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp build/icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 [[ -f build/icon/Assets.car ]] && cp build/icon/Assets.car "$APP/Contents/Resources/Assets.car"
-codesign --force --sign - "$APP" >/dev/null
-echo "✓ $APP"
+# Signature : le certificat auto-signé « Hello Code Signing » du trousseau. Identité stable d'une version à l'autre :
+# macOS garde les autorisations (Accessibilité, Automatisation, Enregistrement de l'écran) après une mise à jour.
+# Sauvegarde : ~/.config/hello/code-signing.p12 (mot de passe à côté) ; à réimporter avec
+#   security import ~/.config/hello/code-signing.p12 -k login.keychain-db -P "$(cat ~/.config/hello/code-signing.p12.password)" -T /usr/bin/codesign
+# Sans lui, signature ad hoc : les autorisations sautent à chaque compilation.
+SIGN_IDENTITY=${HELLO_SIGN_IDENTITY:-Hello Code Signing}
+if security find-identity -p codesigning | grep -q "\"$SIGN_IDENTITY\""; then
+    codesign --force --sign "$SIGN_IDENTITY" "$APP" >/dev/null 2>&1
+else
+    echo "ATTENTION : certificat « $SIGN_IDENTITY » absent, signature ad hoc (les autorisations sauteront)" >&2
+    codesign --force --sign - "$APP" >/dev/null
+fi
+codesign --verify --strict "$APP"
+echo "✓ $APP ($(codesign -d -r- "$APP" 2>&1 | grep -q 'certificate leaf' && echo "signé : $SIGN_IDENTITY" || echo 'signé ad hoc'))"
 
 if [[ "${1:-}" == "install" ]]; then
     pkill -x Hello 2>/dev/null || true

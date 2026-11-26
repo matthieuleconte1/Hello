@@ -438,8 +438,9 @@ struct AgentSettings: View {
                 .padding(.vertical, 4)
                 Toggle("Donner à l'IA la liste des fenêtres ouvertes", isOn: $settings.agentWindows)
             } header: { Text("Ce que l'IA peut faire sur ce Mac") } footer: {
-                Text("Les commandes de l'IA héritent des autorisations de Hello. Hello étant signé localement, macOS peut "
-                     + "oublier l'Accessibilité après une mise à jour : retire Hello de la liste puis rajoute-le.")
+                Text("Les commandes de l'IA héritent des autorisations de Hello. Depuis la 2.2.2, macOS les garde d'une "
+                     + "mise à jour à l'autre : en venant d'une version plus ancienne, retire Hello de la liste puis rajoute-le, "
+                     + "une dernière fois.")
             }
             Section {
                 HStack(spacing: 12) {

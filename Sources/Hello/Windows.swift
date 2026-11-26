@@ -306,7 +306,8 @@ struct PermissionChecklist: View {
             }
             PermissionRow(symbol: "accessibility", tint: .blue, title: "Accessibilité",
                           detail: "Permet de coller directement emoji et éléments du presse-papiers dans l'app active. "
-                              + "Sans elle, Hello copie seulement. Après une recompilation, retire Hello de la liste puis rajoute-le.",
+                              + "Sans elle, Hello copie seulement. "
+                              + "Depuis la 2.2.2, macOS la garde d'une mise à jour à l'autre : en venant d'une version plus ancienne, retire Hello de la liste puis rajoute-le, une dernière fois.",
                           ok: center.accessibility) {
                 if !center.accessibility {
                     Button("Autoriser…") { center.requestAccessibility() }
@@ -390,8 +391,8 @@ struct AgentChecklist: View {
             PermissionRow(symbol: "accessibility", tint: .blue, title: "Accessibilité pour l'IA",
                           detail: center.accessibility
                               ? "L'IA peut cliquer, taper et utiliser les menus des apps (via System Events)."
-                              : "Sans elle, l'IA ne peut ni cliquer, ni taper, ni utiliser les menus des apps. Hello étant "
-                              + "signé localement, macOS l'oublie après une mise à jour : retire Hello de la liste puis rajoute-le.",
+                              : "Sans elle, l'IA ne peut ni cliquer, ni taper, ni utiliser les menus des apps. "
+                              + "Depuis la 2.2.2, macOS la garde d'une mise à jour à l'autre : en venant d'une version plus ancienne, retire Hello de la liste puis rajoute-le, une dernière fois.",
                           ok: center.accessibility, optional: true) {
                 if !center.accessibility {
                     Button("Autoriser…") { center.requestAccessibility() }
