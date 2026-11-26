@@ -181,7 +181,7 @@ enum CyanotypeLook {
             // La sélection est rendue par `CyanotypeSelection` (lavis surexposé fondu dans le grain), ou en aplat plein.
             selectionFill: flat ? flatSelection.fill : .clear,
             selectionInk: flat ? flatSelection.ink : nil,
-            rowRadius: 7, cellRadius: 11, radius: 15,
+            rowRadius: 9, cellRadius: 14, radius: 21,
             border: (p.paperInk.opacity(p.chromeDark ? 0.16 : 0.14), 1),
             // Pas de filet rectiligne sur la marge papier : le bord passé au pinceau fait la séparation.
             divider: .clear,

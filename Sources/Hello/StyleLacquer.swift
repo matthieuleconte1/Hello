@@ -197,9 +197,9 @@ enum LacquerLook {
             toast: p.gold,
             selectionFill: p.selection,
             selectionInk: nil,
-            rowRadius: 8,
-            cellRadius: 11,
-            radius: 16,
+            rowRadius: 10,
+            cellRadius: 14,
+            radius: 22,
             // Bordure 1 pt en dégradé doré (30 % en haut → 8 % en bas) dessinée par `LacquerSurface`.
             border: nil,
             // Séparateurs dorés fondus dessinés par `LacquerDivider`.

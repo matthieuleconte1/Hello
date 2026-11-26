@@ -70,9 +70,9 @@ struct HelloMark: View {
         case field(ink: Color, dot: Color)
         /// Atelier Suisse : voir StyleSwiss.swift.
         case swiss(ink: Color, dot: Color)
-        /// Atelier Platine : voir StylePlatinum.swift.
+        /// Atelier Platinum : voir StylePlatinum.swift.
         case platinum(ink: Color, dot: Color)
-        /// E-Encre : voir StyleEInk.swift.
+        /// E-Ink : voir StyleEInk.swift.
         case eink(ink: Color, dot: Color)
         /// Laque : voir StyleLacquer.swift.
         case lacquer(ink: Color, dot: Color)

@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// Atelier Platine : l'apparence Apple Platinum de Mac OS 8 et 9 (Macintosh Human Interface Guidelines classiques).
+// Atelier Platinum : l'apparence Apple Platinum de Mac OS 8 et 9 (Macintosh Human Interface Guidelines classiques).
 // Gris perle structuré par des biseaux au pixel près (lumière en haut à gauche, ombre en bas à droite),
 // en-tête à fines rayures horizontales (pinstripes en motif bitmap mis en cache), puits de liste à biseau inversé,
 // sélection pleine largeur sans arrondi façon Finder, touches et pastilles en boutons biseautés, Geneva,
@@ -186,8 +186,8 @@ enum PlatinumLook {
             accent: hi.accent, accent2: bevelDark, live: hi.accent, toast: hi.accent,
             selectionFill: hi.selection,
             selectionInk: hi.selectionInk,
-            rowRadius: 0, cellRadius: 2,
-            radius: 2,
+            rowRadius: 3, cellRadius: 4,
+            radius: 9,
             border: (dark ? p.darkBorder : p.lightBorder, 1),
             hardShadow: 2,
             hardShadowColor: Color.black.opacity(dark ? 0.85 : 0.65),
@@ -199,7 +199,7 @@ enum PlatinumLook {
             fontFamily: "Geneva",
             displayFamily: "SF Compact",
             paneBorder: nil,
-            paneRadius: 1,
+            paneRadius: 4,
             iconButton: dark ? (Color(hex: "#4C505B"), p.darkInk) : (Color(hex: "#CCCCCC"), p.lightInk),
             strongMeta: true,
             keyFill: dark ? p.darkKeyFill : p.lightKeyFill,
@@ -411,18 +411,20 @@ struct PlatinumSurface: View {
                         .offset(x: stripePadH, y: stripePadV)
                 }
 
-                // Double biseau intérieur au pixel près (juste à l'intérieur de la bordure noire de 1 pt).
+                // Double biseau intérieur au pixel près (juste à l'intérieur de la bordure noire de 1 pt), qui suit
+                // l'arrondi du cadre : un biseau à angles vifs dépasserait dans les coins.
                 Canvas { ctx, size in
-                    drawBevel(in: &ctx, rect: CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1),
-                              topLeft: decor.bevelLight, bottomRight: decor.bevelDark, corner: decor.bevelMidDark)
+                    let bounds = CGRect(origin: .zero, size: size)
+                    drawRoundedBevel(in: &ctx, rect: bounds.insetBy(dx: 1.5, dy: 1.5), radius: max(0, radius - 1.5),
+                                     topLeft: decor.bevelLight, bottomRight: decor.bevelDark)
                     if min(size.width, size.height) > 100 {
-                        drawBevel(in: &ctx, rect: CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2),
-                                  topLeft: decor.bevelMidLight, bottomRight: decor.bevelMidDark,
-                                  corner: decor.bevelMidDark.opacity(0.6))
+                        drawRoundedBevel(in: &ctx, rect: bounds.insetBy(dx: 2.5, dy: 2.5), radius: max(0, radius - 2.5),
+                                         topLeft: decor.bevelMidLight, bottomRight: decor.bevelMidDark)
                     }
                 }
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .allowsHitTesting(false)
     }
 }
@@ -687,7 +689,7 @@ struct PlatinumMarkDot: View {
     }
 }
 
-/// Réglages › Apparence, quand Atelier Platine est choisi.
+/// Réglages › Apparence, quand Atelier Platinum est choisi.
 struct PlatinumSettings: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -738,7 +740,7 @@ struct PlatinumSettings: View {
 
             Toggle("Rayures d'en-tête", isOn: $settings.platinumPinstripes)
         } header: {
-            Text("Atelier Platine")
+            Text("Atelier Platinum")
         } footer: {
             Text("Inspiré de l'apparence Platinum de Mac OS 8 et 9 : biseaux d'un pixel, en-tête à rayures, Geneva et quatre couleurs de surlignage.")
         }

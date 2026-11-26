@@ -18,8 +18,8 @@ enum PanelStyle: String, CaseIterable, Identifiable {
         case .cyanotype: "Cyanotype"
         case .field: "Atelier Champ"
         case .swiss: "Atelier Suisse"
-        case .platinum: "Atelier Platine"
-        case .eink: "E-Encre"
+        case .platinum: "Atelier Platinum"
+        case .eink: "E-Ink"
         case .lacquer: "Laque"
         case .riso: "Riso"
         }

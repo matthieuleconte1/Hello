@@ -22,9 +22,9 @@ enum RevealStyle {
     case detent
     /// Atelier Suisse : voir SwissLook (StyleSwiss.swift).
     case flap
-    /// Atelier Platine : voir PlatinumLook (StylePlatinum.swift).
+    /// Atelier Platinum : voir PlatinumLook (StylePlatinum.swift).
     case zoomRects
-    /// E-Encre : voir EInkLook (StyleEInk.swift).
+    /// E-Ink : voir EInkLook (StyleEInk.swift).
     case refresh
     /// Laque : voir LacquerLook (StyleLacquer.swift).
     case shoji

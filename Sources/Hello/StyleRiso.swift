@@ -116,9 +116,9 @@ enum RisoLook {
             // Sous-titres et accessoires à pleine encre sur l'aplat rose : lisibles, sans gris délavé.
             selectionInk: ink,
             selectionBorder: nil,
-            rowRadius: 5,
-            cellRadius: 8,
-            radius: 10,
+            rowRadius: 8,
+            cellRadius: 11,
+            radius: 17,
             border: (blue.opacity(dark ? 0.88 : 0.95), 1.5),
             hardShadow: 5,
             hardShadowColor: pink.opacity(dark ? 0.45 : 0.48),

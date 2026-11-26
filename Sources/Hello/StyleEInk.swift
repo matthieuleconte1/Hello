@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// E-Encre : le calme d'une dalle à encre électronique (liseuse, reMarkable).
+// E-Ink : le calme d'une dalle à encre électronique (liseuse, reMarkable).
 // Matière gris minéral froid (à distinguer de Papier, crème et vermillon) : ni accent coloré, ni flou,
 // ni transparence, ni dégradé. En Nuit, éclairage frontal ambré sur dalle sombre. Sélection en vidéo inverse
 // pure et instantanée ; à l'ouverture, un bref flash d'inversion (~55 ms) puis plus aucune animation.
@@ -118,10 +118,10 @@ enum EInkLook {
             selectionInk: pane,
             selectionBorder: nil,
             selectionBorderWidth: 1,
-            rowRadius: 3,
-            cellRadius: 4,
+            rowRadius: 6,
+            cellRadius: 8,
             // Panneau : rayon 10, bordure 1,5 pt, ombre courte et mate (sans flou).
-            radius: 10,
+            radius: 16,
             border: (border, 1.5),
             hardShadow: 3,
             hardShadowColor: dark ? p.nightShadow : p.dayShadow,
@@ -491,7 +491,7 @@ struct EInkMarkDot: View {
     }
 }
 
-/// Réglages › Apparence, quand la peau E-Encre est choisie.
+/// Réglages › Apparence, quand la peau E-Ink est choisie.
 struct EInkSettings: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -504,7 +504,7 @@ struct EInkSettings: View {
             Toggle("Grain de dalle", isOn: $settings.einkGrain)
             Toggle("Pastilles tramées (Bayer 4×4)", isOn: $settings.einkDitherTiles)
         } header: {
-            Text("E-Encre")
+            Text("E-Ink")
         } footer: {
             Text("Dalle gris minéral froid le jour, éclairage frontal ambré la nuit. Sélection instantanée en vidéo inverse, sans couleur ni flou.")
         }
