@@ -380,7 +380,7 @@ final class AppSettings: ObservableObject {
     // fin Atelier Suisse
 
 
-    // Atelier Platine (réglages décrits dans StylePlatinum.swift ; ajouter les suivants dans ce bloc)
+    // Atelier Platinum (réglages décrits dans StylePlatinum.swift ; ajouter les suivants dans ce bloc)
     @Published var platinumMode = PlatinumMode(rawValue: value("platinumMode", "auto")) ?? .auto {
         didSet { Self.d.set(platinumMode.rawValue, forKey: "platinumMode") }
     }
@@ -392,10 +392,10 @@ final class AppSettings: ObservableObject {
     @Published var platinumPinstripes = value("platinumPinstripes", true) {
         didSet { Self.d.set(platinumPinstripes, forKey: "platinumPinstripes") }
     }
-    // fin Atelier Platine
+    // fin Atelier Platinum
 
 
-    // E-Encre (réglages décrits dans StyleEInk.swift ; ajouter les suivants dans ce bloc)
+    // E-Ink (réglages décrits dans StyleEInk.swift ; ajouter les suivants dans ce bloc)
     @Published var einkMode = EInkMode(rawValue: value("einkMode", "auto")) ?? .auto {
         didSet { Self.d.set(einkMode.rawValue, forKey: "einkMode") }
     }
@@ -407,7 +407,7 @@ final class AppSettings: ObservableObject {
     @Published var einkDitherTiles = value("einkDitherTiles", true) {
         didSet { Self.d.set(einkDitherTiles, forKey: "einkDitherTiles") }
     }
-    // fin E-Encre
+    // fin E-Ink
 
 
     // Laque (réglages décrits dans StyleLacquer.swift ; ajouter les suivants dans ce bloc)
@@ -500,6 +500,8 @@ final class AppSettings: ObservableObject {
     @Published var agentRouterReasoning = value("agentRouterReasoning", "low") {
         didSet { Self.d.set(agentRouterReasoning, forKey: "agentRouterReasoning") }
     }
+    /// Liste des fenêtres à l'écran jointe aux demandes.
+    @Published var agentWindows = value("agentWindows", true) { didSet { Self.d.set(agentWindows, forKey: "agentWindows") } }
     @Published var agentStrategy = value("agentStrategy", "auto") { didSet { Self.d.set(agentStrategy, forKey: "agentStrategy") } }
     @Published var agentDefaultModel = value("agentDefaultModel", "") {
         didSet { Self.d.set(agentDefaultModel, forKey: "agentDefaultModel") }

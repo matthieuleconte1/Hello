@@ -198,7 +198,7 @@ struct LauncherView: View {
                     if !model.attachments.isEmpty { AttachmentStrip(model: model) }
                     if Hermes.available && (model.query.isEmpty || !model.attachments.isEmpty) {
                         headerButton("paperclip", help: "Joindre des fichiers pour \(AgentEngine.assistant.name) (⌘O)") { model.pickFilesForAgent() }
-                        headerButton("camera.viewfinder", help: "Capture d'écran pour \(AgentEngine.assistant.name) (⇧⌘S)") { model.captureForAgent() }
+                        headerButton("camera.viewfinder", help: "Capture d'écran pour \(AgentEngine.assistant.name) : une zone (⇧⌘S) ou une fenêtre") { model.showCaptureMenu() }
                     }
                     headerButton(Mode.apps.symbol, help: "Toutes les applications") { model.enter(.apps) }
                 }
@@ -1290,9 +1290,11 @@ struct AgentView: View {
                         MarkdownText(text: summary)
                         stepList(running: false)
                         if !run.details.isEmpty { promptBox(run.details) }
+                        accessibilityHint
                     case .answer(let text):
                         status("text.bubble.fill", .blue, "Réponse de \(run.modelLabel)")
                         MarkdownText(text: text)
+                        accessibilityHint
                     case .escalate(let prompt):
                         status("arrow.up.right.circle.fill", .orange, "Demande trop complexe pour le niveau rapide")
                         Text("↵ pour la passer en Recherche & Action (\(AgentLevel.work.modelLabel)), "
@@ -1307,6 +1309,7 @@ struct AgentView: View {
                         status("exclamationmark.triangle.fill", .orange, "\(run.engine.title) n'a pas pu répondre")
                         Text(message).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                             .textSelection(.enabled)
+                        accessibilityHint
                     }
                     Color.clear.frame(height: 1).id("end")
                 }
@@ -1316,6 +1319,22 @@ struct AgentView: View {
             .onChange(of: streamLength) { _, _ in proxy.scrollTo("end", anchor: .bottom) }
             // Conversation rouverte ou question de suite : on arrive sur le dernier échange.
             .onAppear { if !run.earlier.isEmpty { proxy.scrollTo("end", anchor: .bottom) } }
+        }
+    }
+
+    /// L'IA a voulu piloter une app (AppleScript) alors que Hello n'a pas l'accessibilité : un bouton pour réparer.
+    @ViewBuilder private var accessibilityHint: some View {
+        if !run.context.accessibility, run.steps.contains(where: { $0.contains("osascript") }), !AXIsProcessTrusted() {
+            HStack(spacing: 10) {
+                Image(systemName: "accessibility").foregroundStyle(.blue)
+                Text("L'IA n'a pas pu piloter l'app : Hello n'a pas l'accessibilité (macOS l'oublie après une mise à jour).")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Button("Autoriser…") { PermissionCenter.shared.requestAccessibility() }
+                    .controlSize(.small)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue.opacity(0.08)))
         }
     }
 

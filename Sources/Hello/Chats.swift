@@ -136,9 +136,11 @@ extension LauncherModel {
         DispatchQueue.main.async { self.c.focusSearch() }
     }
 
-    /// Question de suite : même conversation, Hermes reçoit les échanges précédents.
+    /// Question de suite : même conversation, Hermes reçoit les échanges précédents. En Auto, si l'échange
+    /// précédent était au niveau Recherche & Action, ce modèle reprend le fil sans repasser par le routeur.
     func followUp(_ text: String, level: AgentLevel) {
         guard let previous = agent else { return }
+        let level = level == .fast && previous.level == .work ? .work : level
         let run = AgentRun(request: text, level: level, conversation: previous.conversation)
         attachAgent(run)
         setQuery("")

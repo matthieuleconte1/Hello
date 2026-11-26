@@ -1,9 +1,9 @@
 import Foundation
 
-/// Fournisseur d'IA d'un niveau : Hermes, Claude Code ou Codex, des outils en ligne de commande déjà connectés
+/// Fournisseur d'IA d'un niveau : Hermes, Claude Code, Codex ou Antigravity (Gemini), des outils en ligne de commande déjà connectés
 /// à leur compte. Hello les lance, lit leurs événements et affiche le résultat.
 enum AgentEngine: String, CaseIterable, Identifiable {
-    case hermes, claude, codex
+    case hermes, claude, codex, agy
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum AgentEngine: String, CaseIterable, Identifiable {
         case .hermes: "Hermes"
         case .claude: "Claude Code"
         case .codex: "Codex"
+        case .agy: "Antigravity"
         }
     }
 
@@ -26,6 +27,7 @@ enum AgentEngine: String, CaseIterable, Identifiable {
         case .hermes: Hermes.installCommand
         case .claude: "curl -fsSL https://claude.ai/install.sh | bash"
         case .codex: "brew install codex"
+        case .agy: "open https://antigravity.google/download"
         }
     }
 
@@ -36,13 +38,14 @@ enum AgentEngine: String, CaseIterable, Identifiable {
         case .claude: [ModelChoice(id: "opus", name: "Opus 5.5"), ModelChoice(id: "sonnet", name: "Sonnet 5.5"),
                        ModelChoice(id: "haiku", name: "Haiku 5.5"), ModelChoice(id: "fable", name: "Fable 5.1")]
         case .codex: EngineStatus.shared.codexModels
+        case .agy: EngineStatus.shared.agyModels
         }
     }
 
     var reasoningLevels: [String] {
         switch self {
         case .hermes: ["none", "minimal", "low", "medium", "high", "xhigh"]
-        case .claude, .codex: ["low", "medium", "high", "xhigh", "max"]
+        case .claude, .codex, .agy: ["low", "medium", "high", "xhigh", "max"]
         }
     }
 
@@ -58,6 +61,10 @@ enum AgentEngine: String, CaseIterable, Identifiable {
         case (.codex, .fast): ("", "gpt-6-luna", "low")
         case (.codex, .work): ("", "gpt-6.1-sol", "medium")
         case (.codex, .code): ("", "", "")
+        // Le niveau de raisonnement fait partie du nom des modèles d'Antigravity.
+        case (.agy, .fast): ("", "gemini-3.8-flash-low", "")
+        case (.agy, .work): ("", "gemini-4-hydrogen-medium", "")
+        case (.agy, .code): ("", "", "")
         }
     }
 
@@ -73,7 +80,7 @@ enum AgentEngine: String, CaseIterable, Identifiable {
             var args = Hermes.modelArgs(provider: config.provider, model: config.model)
             if !config.reasoning.isEmpty { args += ["--reasoning", config.reasoning] }
             return args
-        case .claude:
+        case .claude, .agy:
             return (config.model.isEmpty ? [] : ["--model", config.model])
                 + (config.reasoning.isEmpty ? [] : ["--effort", config.reasoning])
         case .codex:
@@ -88,6 +95,7 @@ enum AgentEngine: String, CaseIterable, Identifiable {
         case .hermes: ["-z", prompt, "-t", "todo"] + modelArgs(config)
         case .claude: ["-p", prompt, "--output-format", "text", "--tools", "", "--no-session-persistence"] + modelArgs(config)
         case .codex: ["exec", prompt, "--json", "--skip-git-repo-check", "--ephemeral", "-s", "read-only"] + modelArgs(config)
+        case .agy: ["-p", prompt, "--output-format", "text"] + modelArgs(config)
         }
     }
 
@@ -112,6 +120,9 @@ enum AgentEngine: String, CaseIterable, Identifiable {
                     "-c", "sandbox_workspace_write.network_access=true",
                     "-C", Shell.expand(AppSettings.shared.agentWorkdir)]
                 + modelArgs(config) + (images.isEmpty ? [] : ["-i"] + images)
+        case .agy:
+            // Mode par défaut (request-review) : Antigravity juge lui-même les commandes à risque.
+            return ["-p", prompt, "--output-format", "stream-json"] + modelArgs(config)
         }
     }
 
@@ -124,6 +135,7 @@ enum AgentEngine: String, CaseIterable, Identifiable {
         case .hermes: "hermes chat -q"
         case .claude: "claude"
         case .codex: "codex"
+        case .agy: "agy -i"
         }
         return ([head, Hermes.quote(prompt)] + modelArgs(config).map(Hermes.quote)).joined(separator: " ")
     }
@@ -135,6 +147,7 @@ enum AgentEngine: String, CaseIterable, Identifiable {
                 .map(Hermes.quote)).joined(separator: " ")
         case .claude: "claude --resume \(Hermes.quote(sessionID))"
         case .codex: "codex resume \(Hermes.quote(sessionID))"
+        case .agy: "agy --conversation \(Hermes.quote(sessionID))"
         }
     }
 
@@ -161,7 +174,7 @@ struct LevelConfig {
     var label: String {
         switch engine {
         case .hermes: Hermes.label(provider: provider, model: model)
-        case .claude, .codex: (model.isEmpty ? "modèle par défaut" : engine.modelName(model)) + " · " + engine.title
+        case .claude, .codex, .agy: (model.isEmpty ? "modèle par défaut" : engine.modelName(model)) + " · " + engine.title
         }
     }
 }
@@ -197,11 +210,12 @@ extension AgentLevel {
     }
 }
 
-/// Emplacements de `claude` et `codex`, et modèles de Codex (Hermes a son propre état).
+/// Emplacements de `claude`, `codex` et `agy`, et modèles de Codex et d'Antigravity (Hermes a son propre état).
 final class EngineStatus: ObservableObject {
     static let shared = EngineStatus()
     @Published fileprivate(set) var paths: [AgentEngine: String] = [:]
     @Published fileprivate(set) var codexModels: [ModelChoice] = []
+    @Published fileprivate(set) var agyModels: [ModelChoice] = []
 
     static func locate() {
         DispatchQueue.global(qos: .utility).async {
@@ -210,6 +224,7 @@ final class EngineStatus: ObservableObject {
                 .claude: [Shell.home + "/.local/bin/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude",
                           Shell.home + "/.claude/local/claude"],
                 .codex: ["/opt/homebrew/bin/codex", "/usr/local/bin/codex", Shell.home + "/.local/bin/codex"],
+                .agy: [Shell.home + "/.local/bin/agy", "/opt/homebrew/bin/agy", "/usr/local/bin/agy"],
             ]
             for (engine, candidates) in places {
                 let fromShell = Shell.capture("command -v \(engine.rawValue)").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -218,11 +233,24 @@ final class EngineStatus: ObservableObject {
                     $0.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: $0)
                 }
             }
+            // Les fournisseurs trouvés s'affichent tout de suite ; les modèles d'Antigravity (lus sur le réseau)
+            // arrivent ensuite.
             let models = codexModelList()
             DispatchQueue.main.async {
                 shared.paths = found
                 shared.codexModels = models
             }
+            let agy = found[.agy].map(agyModelList) ?? []
+            DispatchQueue.main.async { if !agy.isEmpty { shared.agyModels = agy } }
+        }
+    }
+
+    /// `agy models` : une ligne « identifiant<TAB>nom affiché » par modèle.
+    private static func agyModelList(_ binary: String) -> [ModelChoice] {
+        Shell.capture(Hermes.quote(binary) + " models").split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: "\t", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count == 2, !parts[0].isEmpty, !parts[0].contains(" ") else { return nil }
+            return ModelChoice(id: parts[0], name: parts[1])
         }
     }
 
@@ -263,6 +291,7 @@ final class EventParser {
         case .hermes: return hermes(event)
         case .claude: return claude(event)
         case .codex: return codex(event)
+        case .agy: return agy(event)
         }
     }
 
@@ -335,6 +364,53 @@ final class EventParser {
         default: break
         }
         return []
+    }
+
+    /// Antigravity : `init`, puis des `step_update` (outils, morceaux de texte), puis `result`.
+    private func agy(_ event: [String: Any]) -> [EngineEvent] {
+        switch event["event"] as? String {
+        case "init":
+            if let id = event["conversation_id"] as? String { return [.session(id)] }
+        case "step_update":
+            let step = event["step_update"] as? [String: Any] ?? [:]
+            switch step["step_type"] as? String {
+            case "tool" where step["state"] as? String == "ACTIVE":
+                let info = step["tool_info"] as? [String: Any]
+                return [.step(Self.agyStep(step["tool_name"] as? String ?? "", input: info?["parameters"] as? [String: Any]))]
+            case "agent_response":
+                if let text = step["text_delta"] as? String, !text.isEmpty { return [.text(text)] }
+            default: break
+            }
+        case "result":
+            let result = event["result"] as? [String: Any] ?? [:]
+            let text = (result["response"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if result["status"] as? String != "SUCCESS" || text.isEmpty {
+                let error = (result["error"] as? String) ?? ((result["error"] as? [String: Any])?["message"] as? String)
+                return [.failure(text.isEmpty ? error ?? "Aucune réponse." : text)]
+            }
+            return [.final(text)]
+        default: break
+        }
+        return []
+    }
+
+    private static func agyStep(_ name: String, input: [String: Any]?) -> String {
+        let text = { (keys: [String]) in
+            keys.lazy.compactMap { (input?[$0] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) }.first
+        }
+        let file = { text(["AbsolutePath", "TargetFile", "FilePath", "path"]).map { URL(fileURLWithPath: $0).lastPathComponent } ?? "un fichier" }
+        switch name {
+        case "run_command": return text(["CommandLine", "command"]).map { "$ " + $0.replacingOccurrences(of: "\n", with: " ⏎ ") } ?? "Lance une commande"
+        case "view_file": return "Lit \(file())"
+        case "write_to_file", "replace_file_content", "multi_replace_file_content", "sed_file", "notebook_edit": return "Écrit \(file())"
+        case "find_by_name", "grep_search", "list_dir": return "Cherche des fichiers"
+        case "search_web": return text(["query", "Query"]).map { "Cherche « \($0) »" } ?? "Cherche sur le web"
+        case "read_url_content": return "Lit une page web"
+        case "manage_task": return "Planifie les étapes"
+        case "invoke_subagent", "browser_subagent": return "Délègue une sous-tâche"
+        case let n where n.hasPrefix("browser") || n.contains("_browser"): return "Navigue dans le navigateur"
+        default: return name
+        }
     }
 
     /// « /bin/zsh -lc "osascript … && date" » ou « /bin/zsh -lc date » → la commande elle-même.

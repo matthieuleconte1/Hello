@@ -169,10 +169,14 @@ enum Hermes {
             Decide the level of effort needed and reply with exactly one of these forms and nothing else:
             ANSWER: <short answer in the user's language> — level 1, fast: a short answer you are sure of is enough \
             (fact, definition, conversion, which command to use, a formula). \(Self.formatting)
+            ACT: <the action rewritten as a precise, self-contained instruction in the user's language> — level 1, \
+            quick action: a simple action on this Mac done in one or two commands, with nothing to research (open a \
+            file, folder, app or URL, reveal something in Finder, find a file by name, set the volume or dark mode, \
+            copy text). You will do it yourself right after, with tools.
             WORK: <the request rewritten as a precise, self-contained instruction in the user's language> — level 2, \
             research and action: needs up-to-date information, web search, comparing sources or a thoughtful \
-            explanation, or any action on this Mac (open, launch or control apps, change a setting, find, open or \
-            organize files, look at the screen or the attachments).
+            explanation, or an action on this Mac that is not simple (several steps, controlling other apps, \
+            organizing files, looking at the screen, a window or the attachments).
             CODE: <rewritten, precise, self-contained prompt for a coding agent, in the user's language, with useful \
             context: paths, constraints, expected result> — level 3: writing or fixing code, building an app or a \
             script, long multi-step work in a project.
@@ -206,7 +210,13 @@ enum Hermes {
         2. AppleScript with `osascript -e`: scriptable apps (Finder selection and windows, the current tab of Safari \
         or Chrome, Music, Calendar, Reminders, Notes, Mail drafts), System Events (dark mode, keystrokes, menus, the \
         interface of other apps), `set volume output volume N`.
-        3. To see the screen: `screencapture -x /tmp/hello-screen.png`, then vision_analyze.
+        For a browser (Safari, Chrome, Bluelium or another Chromium browser): read or change the current tab with \
+        AppleScript (`URL of active tab of front window`, `title of active tab of front window`, `set URL of active tab \
+        of front window to …`; Safari: `current tab`), and open pages with `open -a "App" "URL"`. Running JavaScript \
+        through AppleScript needs a browser setting only the user may turn on: never change it; use your own browser \
+        or web tools instead.
+        3. To see the screen: `screencapture -x /tmp/hello-screen.png`, or one window from the context with \
+        `screencapture -x -o -l<window id> /tmp/hello-window.png`, then look at the image (vision_analyze).
         Never do anything destructive or irreversible (deleting or overwriting data, emptying the trash, sending \
         messages or emails, payments, purchases, pushing code, changing passwords or security settings): prepare it \
         (draft, open the right page or window) and leave the last step to the user.
@@ -429,9 +439,9 @@ final class AgentRun: ObservableObject {
         }
     }
 
-    /// Luna a choisi : niveau 1 (elle répond), 2 (recherche & action) ou 3 (code dans le terminal).
+    /// Luna a choisi : niveau 1 (elle répond ou fait une action simple), 2 (recherche & action) ou 3 (code dans le terminal).
     private func route(_ text: String) {
-        let tags = ["ANSWER:", "WORK:", "CODE:"]
+        let tags = ["ANSWER:", "ACT:", "WORK:", "CODE:"]
         let found = tags.compactMap { tag in text.range(of: tag).map { (tag, $0) } }
             .min { $0.1.lowerBound < $1.1.lowerBound }
         guard let (tag, range) = found else {
@@ -442,6 +452,7 @@ final class AgentRun: ObservableObject {
             .replacingOccurrences(of: #"\s*[—–-]\s*level\s*\d\s*$"#, with: "", options: [.regularExpression, .caseInsensitive])
             .trimmingCharacters(in: .whitespacesAndNewlines)
         switch tag {
+        case "ACT:": work(content, using: .fast)
         case "WORK:": work(content)
         case "CODE:":
             level = .code
@@ -454,14 +465,17 @@ final class AgentRun: ObservableObject {
 
     // MARK: Niveau 2 — Recherche & Action (réponse en direct dans Hello)
 
-    func work(_ prompt: String) {
+    /// `using: .fast` : action simple faite par le modèle rapide lui-même (ouvrir un fichier, une app…), sans
+    /// passer au modèle du niveau 2.
+    func work(_ prompt: String, using tier: AgentLevel = .work) {
         stage = "s'en occupe"
-        level = .work
+        level = tier
         phase = .thinking
         startedAt = Date()
-        guard let (engine, config) = engine(for: .work) else { return }
+        guard let (engine, config) = engine(for: tier) else { return }
         let args = engine.workArgs(Hermes.workPrompt(for: prompt, context: context), config, context: context)
-        stream(args, showText: true, budget: engine.needsTimeout ? 300 : nil) { [weak self] text in
+        let budget: TimeInterval = tier == .fast ? 120 : 300
+        stream(args, showText: true, budget: engine.needsTimeout ? budget : nil) { [weak self] text in
             guard let self else { return }
             // Une action se termine par « DONE: résumé » ; une recherche, par la réponse elle-même.
             if let range = text.range(of: "DONE:", options: .backwards) {

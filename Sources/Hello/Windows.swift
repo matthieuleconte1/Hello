@@ -48,6 +48,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general: "raccourci hotkey clavier commande espace démarrage session ouverture barre des menus icône accueil données dossier"
         case .appearance: "style thème couleurs palette accent verre liquid glass atelier material phosphore papier néo-brutal focus "
+            + "platinum platine graphite e-ink encre liseuse cyanotype champ suisse laque riso "
             + "clair sombre forme icônes taille position arrondi ombre densité compacte aérée texte sous-titres type raccourcis"
         case .motion: "animations mouvement vitesse lent rapide intensité subtiles expressives cascade reflet effet ouverture lancement ressort"
         case .search: "recherche terminal shell zsh historique zoxide éditeur frécence apprentissage récents classement"
@@ -110,7 +111,27 @@ struct SettingsIcon: View {
 /// Panneau affiché, retenu d'une ouverture à l'autre (comme Réglages Système).
 final class TabSelection: ObservableObject {
     @Published var tab = SettingsTab(rawValue: UserDefaults.standard.string(forKey: "settingsTab") ?? "") ?? .general {
-        didSet { UserDefaults.standard.set(tab.rawValue, forKey: "settingsTab") }
+        didSet {
+            UserDefaults.standard.set(tab.rawValue, forKey: "settingsTab")
+            guard !navigating, tab != oldValue else { return }
+            back.append(oldValue)
+            forward.removeAll()
+        }
+    }
+    /// Panneaux visités, pour les flèches précédent / suivant de la barre d'outils.
+    @Published private(set) var back: [SettingsTab] = []
+    @Published private(set) var forward: [SettingsTab] = []
+    private var navigating = false
+
+    func goBack() { move(from: &back, to: &forward) }
+    func goForward() { move(from: &forward, to: &back) }
+
+    private func move(from source: inout [SettingsTab], to target: inout [SettingsTab]) {
+        guard let next = source.popLast() else { return }
+        target.append(tab)
+        navigating = true
+        tab = next
+        navigating = false
     }
 }
 
@@ -137,11 +158,20 @@ enum WindowManager {
         Controller.shared.hide()
         if let tab { selection.tab = tab }
         if settingsWindow == nil {
-            let window = makeWindow(size: NSSize(width: 940, height: 700),
-                                    content: SettingsView(selection: selection))
-            window.title = "Réglages de Hello"
+            // Fenêtre standard, comme Réglages Système : redimensionnable, barre d'outils unifiée gérée par SwiftUI
+            // (titre du panneau, précédent / suivant), apparence du système.
+            let controller = NSHostingController(rootView: SettingsView(selection: selection))
+            controller.sizingOptions = []
+            controller.sceneBridgingOptions = [.toolbars]
+            let window = NSWindow(contentViewController: controller)
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             window.toolbarStyle = .unified
-            window.toolbar = NSToolbar()
+            window.title = "Réglages de Hello"
+            window.isReleasedWhenClosed = false
+            window.setContentSize(NSSize(width: 940, height: 700))
+            window.contentMinSize = NSSize(width: 860, height: 600)
+            window.center()
+            window.setFrameAutosaveName("HelloSettings")
             settingsWindow = window
         }
         present(settingsWindow!)
@@ -316,6 +346,7 @@ struct AgentChecklist: View {
     @ObservedObject private var hermes = HermesStatus.shared
     @ObservedObject private var engines = EngineStatus.shared
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var center = PermissionCenter.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -340,16 +371,38 @@ struct AgentChecklist: View {
                     }
                 }
             }
-            ForEach([AgentEngine.claude, .codex]) { engine in
-                PermissionRow(symbol: engine == .claude ? "asterisk" : "chevron.left.forwardslash.chevron.right",
-                              tint: engine == .claude ? .orange : .teal, title: engine.title,
+            ForEach([AgentEngine.claude, .codex, .agy]) { engine in
+                PermissionRow(symbol: engine == .claude ? "asterisk" : engine == .agy ? "sparkle" : "chevron.left.forwardslash.chevron.right",
+                              tint: engine == .claude ? .orange : engine == .agy ? .blue : .teal, title: engine.title,
                               detail: engine.binary.map { "Installé : \($0)" }
                                   ?? "Optionnel : un autre fournisseur possible pour chaque niveau, avec ton compte "
-                                  + (engine == .claude ? "Claude." : "ChatGPT."),
+                                  + (engine == .claude ? "Claude." : engine == .agy ? "Google (Gemini)." : "ChatGPT."),
                               ok: engine.installed, optional: true) {
                     if !engine.installed {
-                        Button("Installer dans \(Shell.terminal.name)") { Shell.runInTerminal(engine.installCommand) }
+                        if engine == .agy {
+                            Button("Télécharger…") { NSWorkspace.shared.open(URL(string: "https://antigravity.google/download")!) }
+                        } else {
+                            Button("Installer dans \(Shell.terminal.name)") { Shell.runInTerminal(engine.installCommand) }
+                        }
                     }
+                }
+            }
+            PermissionRow(symbol: "accessibility", tint: .blue, title: "Accessibilité pour l'IA",
+                          detail: center.accessibility
+                              ? "L'IA peut cliquer, taper et utiliser les menus des apps (via System Events)."
+                              : "Sans elle, l'IA ne peut ni cliquer, ni taper, ni utiliser les menus des apps. Hello étant "
+                              + "signé localement, macOS l'oublie après une mise à jour : retire Hello de la liste puis rajoute-le.",
+                          ok: center.accessibility, optional: true) {
+                if !center.accessibility {
+                    Button("Autoriser…") { center.requestAccessibility() }
+                    Button("Ouvrir les Réglages") { center.openSettings("Privacy_Accessibility") }
+                }
+            }
+            PermissionRow(symbol: "gearshape.2", tint: .gray, title: "Contrôle de System Events",
+                          detail: "Pour que l'IA pilote les autres apps par AppleScript (menus, touches, mode sombre).",
+                          ok: center.systemEvents == .granted, optional: true) {
+                if center.systemEvents != .granted {
+                    Button(center.systemEvents == .denied ? "Ouvrir les Réglages" : "Autoriser…") { center.requestSystemEvents() }
                 }
             }
             PermissionRow(symbol: "cpu", tint: .orange, title: "Modèles utilisés",
@@ -372,7 +425,9 @@ struct AgentChecklist: View {
         .onAppear {
             Hermes.locate()
             EngineStatus.locate()
+            center.startWatching()
         }
+        .onDisappear { center.stopWatching() }
         // Retour du Terminal après l'installation ou la connexion : on revérifie.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Hermes.locate()
@@ -663,6 +718,16 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .navigationTitle(selection.tab.title)
             .id(selection.tab)
+            .toolbar {
+                ToolbarItemGroup(placement: .navigation) {
+                    Button { selection.goBack() } label: { Image(systemName: "chevron.left") }
+                        .disabled(selection.back.isEmpty)
+                        .help("Précédent")
+                    Button { selection.goForward() } label: { Image(systemName: "chevron.right") }
+                        .disabled(selection.forward.isEmpty)
+                        .help("Suivant")
+                }
+            }
         }
         .frame(minWidth: 860, minHeight: 600)
         .onAppear { WindowManager.setSettingsTitle(selection.tab.title) }
@@ -1302,134 +1367,6 @@ private struct UpdateSettings: View {
         case .downloading(let progress): "Téléchargement… \(Int(progress * 100)) %"
         case .installing: "Installation… Hello va se relancer."
         case .failed(let message): "Échec : \(message)"
-        }
-    }
-}
-
-private struct AgentSettings: View {
-    @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var chats = ChatStore.shared
-    @ObservedObject private var engines = EngineStatus.shared
-
-    /// Fournisseur, modèle et raisonnement d'un niveau. Changer de fournisseur reprend le réglage proposé pour lui.
-    @ViewBuilder
-    private func levelControls(_ level: AgentLevel, provider: Binding<String>, model: Binding<String>,
-                               reasoning: Binding<String>) -> some View {
-        let engine = level.config.engine
-        Picker("Fournisseur", selection: Binding(get: { engine }, set: { level.setEngine($0) })) {
-            ForEach(AgentEngine.allCases) { option in
-                Text(option.installed ? option.title : "\(option.title) (non installé)").tag(option)
-            }
-        }
-        if engine == .hermes {
-            modelPicker("Modèle", provider: provider, model: model, allowDefault: true)
-        } else {
-            let known = engine.models
-            let choices = model.wrappedValue.isEmpty || known.contains(where: { $0.id == model.wrappedValue })
-                ? known : [ModelChoice(id: model.wrappedValue, name: model.wrappedValue)] + known
-            Picker("Modèle", selection: model) {
-                Text("Défaut de \(engine.title)").tag("")
-                ForEach(choices, id: \.id) { Text($0.name).tag($0.id) }
-            }
-        }
-        Picker("Raisonnement", selection: reasoning) {
-            Text("Défaut").tag("")
-            ForEach(engine.reasoningLevels, id: \.self) { Text($0).tag($0) }
-            if !reasoning.wrappedValue.isEmpty && !engine.reasoningLevels.contains(reasoning.wrappedValue) {
-                Text(reasoning.wrappedValue).tag(reasoning.wrappedValue)
-            }
-        }
-        if !engine.installed {
-            Button("Installer \(engine.title) dans \(Shell.terminal.name)") { Shell.runInTerminal(engine.installCommand) }
-        }
-    }
-
-    /// Menu groupé par provider ; la sélection est « provider|modèle ».
-    private func modelPicker(_ title: String, provider: Binding<String>, model: Binding<String>, allowDefault: Bool) -> some View {
-        let current = model.wrappedValue.isEmpty ? "" : provider.wrappedValue + "|" + model.wrappedValue
-        var options = Hermes.models
-        if !current.isEmpty && !options.contains(where: { $0.tag == current }) {
-            options.insert(Hermes.ModelOption(provider: provider.wrappedValue, model: model.wrappedValue), at: 0)
-        }
-        let providers = options.reduce(into: [String]()) { if !$0.contains($1.provider) { $0.append($1.provider) } }
-        let selection = Binding<String>(
-            get: { current },
-            set: { tag in
-                let parts = tag.split(separator: "|", maxSplits: 1).map(String.init)
-                provider.wrappedValue = parts.count == 2 ? parts[0] : ""
-                model.wrappedValue = parts.count == 2 ? parts[1] : ""
-            })
-        return Picker(title, selection: selection) {
-            if allowDefault { Text("Défaut de Hermes").tag("") }
-            ForEach(providers, id: \.self) { p in
-                Section(Hermes.providerName(p.isEmpty ? "défaut" : p)) {
-                    ForEach(options.filter { $0.provider == p }, id: \.tag) { Text($0.model).tag($0.tag) }
-                }
-            }
-        }
-    }
-
-    var body: some View {
-        SettingsForm(tab: .agent) {
-            Section {
-                AgentChecklist().padding(.vertical, 4)
-            } footer: {
-                Text("Tape « ? ta demande » (ou une phrase). En Auto, le niveau 1 répond tout de suite (Fast) ou "
-                     + "passe la main au niveau 2 · Recherche & Action (web et actions sur le Mac, réponse dans Hello) ou "
-                     + "au niveau 3 · Code (session dans le terminal). ⌘↵ / « ?? » force le niveau 2, ⌥↵ / « ??? » le niveau 3. "
-                     + "Tape « / » pour les commandes : /resume, /new, /retry, /code, /terminal, /copy…")
-            }
-            Section {
-                levelControls(.fast, provider: $settings.agentRouterProvider, model: $settings.agentRouterModel,
-                              reasoning: $settings.agentRouterReasoning)
-                Picker("Mode", selection: $settings.agentStrategy) {
-                    Text("Auto : choisir le niveau selon la demande").tag("auto")
-                    Text("Toujours Recherche & Action").tag("act")
-                    Text("Toujours Code").tag("delegate")
-                }
-            } header: { Text("Niveau 1 · Fast / Auto") } footer: {
-                Text("Répond seul aux questions simples, sans aucun outil. Pour le reste, il reformule ta demande "
-                     + "et la confie au niveau 2 ou 3. Prends un modèle rapide : Luna (Hermes ou Codex), Haiku (Claude Code).")
-            }
-            Section {
-                levelControls(.work, provider: $settings.agentResearchProvider, model: $settings.agentResearchModel,
-                              reasoning: $settings.agentResearchReasoning)
-            } header: { Text("Niveau 2 · Recherche & Action") } footer: {
-                Text("Cherche sur le web et agit sur le Mac (terminal, AppleScript, Raccourcis, captures d'écran), puis répond "
-                     + "dans Hello, en direct. Il ne clique jamais à ta place et laisse la dernière étape des actions "
-                     + "irréversibles. 5 min maximum. Joins des fichiers avec ⌘O ou ⌘V, une capture avec ⇧⌘S. "
-                     + "⌘↵ sur la réponse reprend la conversation dans le terminal. " + workSafety)
-            }
-            Section {
-                levelControls(.code, provider: $settings.agentDefaultProvider, model: $settings.agentDefaultModel,
-                              reasoning: $settings.agentDefaultReasoning)
-                TextField("Dossier de travail", text: $settings.agentWorkdir)
-            } header: { Text("Niveau 3 · Code (terminal)") } footer: {
-                Text("Ouvert dans \(Shell.terminal.name) (Réglages › Recherche & Terminal) avec une session interactive du fournisseur, "
-                     + "dans le dossier de travail, pour écrire du code, créer une app ou un script, ou tout travail long sur un projet.")
-            }
-            Section {
-                Toggle("Garder l'historique des conversations", isOn: $settings.agentHistory)
-                Button("Effacer les \(chats.conversations.count) conversations") {
-                    if confirm("Effacer toutes les conversations avec l'IA ?", button: "Effacer") { chats.clear() }
-                }
-                .disabled(chats.conversations.isEmpty)
-            } header: { Text("Mémoire") } footer: {
-                Text("Sous une réponse, tape une question de suite : l'IA reçoit les échanges précédents, quel que soit le "
-                     + "fournisseur. Les conversations se retrouvent avec « ? », « /resume » ou la commande « Conversations avec "
-                     + "l'IA », et sont gardées sur ce Mac (200 au plus). Hermes peut aussi noter dans sa propre mémoire ce "
-                     + "qu'il apprend de toi.")
-            }
-        }
-        .onAppear { EngineStatus.locate() }
-    }
-
-    /// Ce que le fournisseur du niveau 2 a le droit de faire sans demander.
-    private var workSafety: String {
-        switch AgentLevel.work.config.engine {
-        case .hermes: "Hermes bloque lui-même les commandes dangereuses."
-        case .claude: "Claude Code n'a que le terminal, la lecture de fichiers et le web ; rm, sudo et git push lui sont refusés."
-        case .codex: "Codex travaille dans son bac à sable : il n'écrit que dans le dossier de travail, avec accès au réseau."
         }
     }
 }

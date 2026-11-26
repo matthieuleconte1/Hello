@@ -12,6 +12,8 @@ final class PermissionCenter: ObservableObject {
 
     @Published private(set) var accessibility = false
     @Published private(set) var automation: PermissionState = .unknown
+    /// Contrôle de System Events : clics, frappes et menus des autres apps, pour l'IA.
+    @Published private(set) var systemEvents: PermissionState = .unknown
     @Published private(set) var fullDisk = false
     @Published private(set) var hotkeyActive = false
     @Published private(set) var spotlightConflict = false
@@ -48,8 +50,12 @@ final class PermissionCenter: ObservableObject {
         update(\.raycastRunning, !NSRunningApplication.runningApplications(withBundleIdentifier: "com.raycast.macos").isEmpty)
         update(\.launchAtLogin, SMAppService.mainApp.status == .enabled)
         DispatchQueue.global(qos: .utility).async {
-            let state = Self.finderAutomation(ask: false)
-            DispatchQueue.main.async { self.update(\.automation, state) }
+            let state = Self.automation(Self.finder, ask: false)
+            let events = Self.automation(Self.systemEventsID, ask: false)
+            DispatchQueue.main.async {
+                self.update(\.automation, state)
+                if events != .unknown { self.update(\.systemEvents, events) }
+            }
         }
     }
 
@@ -66,10 +72,26 @@ final class PermissionCenter: ObservableObject {
 
     func requestAutomation() {
         DispatchQueue.global(qos: .userInitiated).async {
-            let state = Self.finderAutomation(ask: true)
+            let state = Self.automation(Self.finder, ask: true)
             DispatchQueue.main.async {
                 self.update(\.automation, state)
                 if state == .denied { self.openSettings("Privacy_Automation") }
+            }
+        }
+    }
+
+    /// System Events doit tourner pour que macOS pose la question.
+    func requestSystemEvents() {
+        let app = URL(fileURLWithPath: "/System/Library/CoreServices/System Events.app")
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        NSWorkspace.shared.openApplication(at: app, configuration: configuration) { _, _ in
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.5) {
+                let state = Self.automation(Self.systemEventsID, ask: true)
+                DispatchQueue.main.async {
+                    self.update(\.systemEvents, state)
+                    if state == .denied { self.openSettings("Privacy_Automation") }
+                }
             }
         }
     }
@@ -130,8 +152,12 @@ final class PermissionCenter: ObservableObject {
         return spotlight["enabled"] as? Bool ?? true
     }
 
-    private static func finderAutomation(ask: Bool) -> PermissionState {
-        let target = NSAppleEventDescriptor(bundleIdentifier: "com.apple.finder")
+    private static let finder = "com.apple.finder"
+    private static let systemEventsID = "com.apple.systemevents"
+
+    /// `.unknown` aussi quand l'app cible ne tourne pas (macOS ne peut pas répondre).
+    private static func automation(_ bundleID: String, ask: Bool) -> PermissionState {
+        let target = NSAppleEventDescriptor(bundleIdentifier: bundleID)
         guard let desc = target.aeDesc else { return .unknown }
         let status = AEDeterminePermissionToAutomateTarget(desc, typeWildCard, typeWildCard, ask)
         switch status {
